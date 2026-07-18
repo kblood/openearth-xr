@@ -82,6 +82,26 @@ viewer.screenSpaceEventHandler.setInputAction((movement: { position: { x: number
 }, ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
 const xrGlobe = new XrGlobeRenderer(xrCanvas);
+const desktopStatus = 'Left drag orbits · right drag tilts · wheel flies · double-click travels';
+
+function leaveXrUi(): void {
+  document.body.classList.remove('xr-active');
+  viewer.useDefaultRenderLoop = true;
+  vrButton!.disabled = false;
+  vrButton!.textContent = 'Enter VR';
+  status!.textContent = desktopStatus;
+}
+
+function enterXrUi(): void {
+  // The headset must receive one compositor-owned canvas. Pausing and hiding
+  // Cesium also prevents its desktop canvas from appearing in the mirror.
+  viewer.useDefaultRenderLoop = false;
+  document.body.classList.add('xr-active');
+  vrButton!.disabled = false;
+  vrButton!.textContent = 'Exit VR';
+  status!.textContent = 'VR: use either thumbstick/trackpad—sideways rotates the Earth, up/down changes its distance. Trigger recentres.';
+}
+
 if (!navigator.xr) {
   vrButton.disabled = true;
   vrButton.textContent = 'WebXR unavailable';
@@ -92,14 +112,13 @@ if (!navigator.xr) {
   }).catch(() => { vrButton.disabled = true; vrButton.textContent = 'VR unavailable'; });
   vrButton.addEventListener('click', async () => {
     try {
+      if (xrGlobe.active) {
+        vrButton.disabled = true;
+        await xrGlobe.exit();
+        return;
+      }
       vrButton.disabled = true;
-      await xrGlobe.enter(() => {
-        vrButton.disabled = false;
-        vrButton.textContent = 'Enter VR';
-        status.textContent = 'Left drag orbits · right drag tilts · wheel flies · double-click travels';
-      });
-      vrButton.textContent = 'VR active';
-      status.textContent = 'Immersive globe active. Thumbstick/trackpad rotates and flies/scales; trigger resets orbital scale.';
+      await xrGlobe.enter(leaveXrUi, enterXrUi);
     } catch (error) {
       vrButton.disabled = false;
       status.textContent = `Could not enter immersive VR: ${error instanceof Error ? error.message : 'unknown error'}`;

@@ -2,6 +2,7 @@
 :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #f2f8ff; background: #07111f; }
 * { box-sizing: border-box; } body { margin: 0; overflow: hidden; } main, #globe { width: 100vw; height: 100vh; display: block; }
 #xr-globe { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 8; }
+.xr-active #globe, .xr-active .hud { display: none; }
 .hud { position: fixed; left: clamp(1.25rem,5vw,5rem); top: clamp(1.25rem,9vh,6rem); max-width: 29rem; text-shadow: 0 2px 20px #000; pointer-events: none; z-index: 2; }
 .eyebrow { color: #7bd7ff; font-size: .72rem; font-weight: 700; letter-spacing: .17em; } h1 { margin: .1rem 0; font-size: clamp(3rem,8vw,6.5rem); letter-spacing: -.075em; } .lede { font-size: 1.05rem; line-height: 1.55; color: #d8e8fa; }
 .actions, .places { display: flex; gap: .55rem; margin-top: 1rem; flex-wrap: wrap; pointer-events: auto; } button { border: 1px solid #7bd7ff; border-radius: .55rem; background: #7bd7ff; color: #03101c; padding: .68rem .9rem; font: inherit; font-size: .86rem; font-weight: 700; cursor: pointer; } button.secondary, .places button { color: #dff6ff; background: #0a233acc; } button:disabled { cursor: not-allowed; opacity: .55; } #status { color: #d3e5f5; font-size: .82rem; line-height: 1.4; max-width: 30rem; }

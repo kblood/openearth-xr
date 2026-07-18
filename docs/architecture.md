@@ -38,11 +38,14 @@ An adapter can then translate OpenMaps-compatible regional exports into this con
 
 ## Roadmap
 
-The immersive renderer owns a dedicated XR-compatible WebGL context because
-CesiumJS does not yet drive a WebXR compositor loop. It renders the globe to
-the headset and maps controller thumbsticks/trackpads to rotate and fly/scale,
-with the trigger resetting orbital scale. The desktop and XR camera models are
-kept intentionally equivalent.
+CesiumJS supplies the precision desktop globe but does not drive a WebXR
+compositor loop. The immersive path therefore uses one dedicated Three.js
+WebXR renderer and pauses the Cesium canvas while a session is active. This is
+intentional: it gives the runtime control of both eye cameras and avoids a
+second desktop globe appearing in the headset. Controller input is attached
+through WebXR `connected` input sources; both standard Touch (axes 2/3) and
+trackpad (axes 0/1) layouts rotate/change globe distance, while trigger resets
+the orbital view.
 
 1. Controller ray targeting, teleport-to-place, and landmark selection.
 2. Tile cache abstraction and open terrain provider.

@@ -16,10 +16,11 @@ npm run dev
 ```
 
 Use a recent WebGL 2 browser. On a WebXR headset/browser, **Enter VR** starts
-an immersive compositor session. Look naturally around the planet; controller
-thumbsticks/trackpads rotate and fly/scale the globe, and the trigger resets a
-comfortable orbital view. This follows the same simple orbit/fly/reset model
-as Google Earth VR while remaining browser-native and open source.
+a dedicated immersive compositor session; the desktop Cesium canvas is paused,
+so the headset receives one globe only. Look naturally around it. Either
+controller thumbstick/trackpad rotates the Earth sideways and changes its
+distance vertically; the trigger resets a comfortable orbital view. **Exit
+VR** ends the session and restores the desktop viewer.
 
 ## Release
 
@@ -35,9 +36,11 @@ OpenEarth will be its own project. It will define an adapter for portable, offli
 
 ## Status
 
-Early Google-Earth-like viewer. Map imagery, orbital-to-ground camera travel,
-and immersive WebXR orbit/fly/reset locomotion are implemented. Open terrain,
-search, and offline bundles are planned layers.
+Early Google-Earth-like viewer. Map imagery and orbital-to-ground camera travel
+are implemented on desktop. The headset view now uses Three.js's WebXR
+compositor integration (rather than manual per-eye rendering) with controller
+orbit/distance/reset input. Open terrain, search, high-detail XR tiles, and
+offline bundles are planned layers.
 
 ## License
 
