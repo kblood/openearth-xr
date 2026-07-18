@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07111f" />
+    <title>OpenEarth XR</title>
+  </head>
+  <body>
+    <main>
+      <canvas id="globe" aria-label="Interactive 3D globe"></canvas>
+      <section class="hud" aria-live="polite">
+        <p class="eyebrow">OPEN SOURCE · WEBXR FIRST</p>
+        <h1>OpenEarth</h1>
+        <p class="lede">A private, open globe for exploring the planet—from desktop to headset.</p>
+        <div class="actions">
+          <button id="enter-vr" type="button">Enter VR</button>
+          <button id="reset-view" class="secondary" type="button">Reset view</button>
+        </div>
+        <p id="status">Drag to rotate · scroll to zoom</p>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
