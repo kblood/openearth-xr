@@ -51,13 +51,16 @@ hand separation changes camera-to-globe distance (never field of view or world
 scale) and the hand-to-hand vector rotates it. Flight and stick zoom use that
 same distance, with speed proportional to altitude and clamped near the
 surface.
-The map surface is a two-stage renderer. An orbital parent globe supplies
-global context; near the surface, a tangent panel above the viewer-facing point
-assembles a 5×5 Web-Mercator XYZ mosaic into one texture. The panel is sized
-from physical altitude and camera FOV, so it continuously covers the view as
-its tile zoom rises from country to city to streets. This avoids gaps and
-mirroring from sparse curved tile meshes, while a minimum radial distance
-prevents the viewer entering the globe.
+The map surface is a two-stage renderer. An orbital parent globe receives a
+small Web-Mercator XYZ mosaic reprojected to equirectangular UVs; this avoids
+incorrectly stretching a single Mercator tile across a sphere. Near the
+surface, a 5×5 XYZ mosaic is draped on a curved spherical cap above the
+viewer-facing point. The cap has an explicit east/north/outward frame and its
+texture is fractionally centred on the selected geographic coordinate. Its size
+is derived from physical altitude and camera FOV, so it continuously covers the
+view as tile zoom rises from country to city to streets. This avoids gaps,
+flat-map transitions, mirrored labels, and unrelated-tile jumps, while a
+minimum radial distance prevents the viewer entering the globe.
 
 1. Controller ray targeting, teleport-to-place, and landmark selection.
 2. Tile cache abstraction and open terrain provider.

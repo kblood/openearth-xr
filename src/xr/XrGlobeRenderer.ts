@@ -10,12 +10,11 @@ import {
   PerspectiveCamera,
   Scene,
   SphereGeometry,
-  TextureLoader,
   Quaternion,
   Vector3,
   WebGLRenderer,
 } from 'three';
-import { CARTO_VOYAGER, XyzTileGlobe } from './XyzTileGlobe';
+import { CARTO_VOYAGER, createGlobalOverviewTexture, XyzTileGlobe } from './XyzTileGlobe';
 
 const STARTING_YAW = -0.8;
 const DEAD_ZONE = 0.12;
@@ -85,19 +84,18 @@ export class XrGlobeRenderer {
 
     const material = new MeshBasicMaterial({ color: 0xd9e7f5 });
     const earth = new Mesh(new SphereGeometry(EARTH_RADIUS, 64, 48), material);
-    earth.rotation.y = Math.PI;
     this.planetRig.position.set(0, 1.35, -3.3);
     this.planetRig.rotation.y = STARTING_YAW;
     this.planetRig.add(earth);
     this.planetRig.add(this.tiles.group);
     this.scene.add(this.planetRig);
 
-    // OSM permits CORS image use. A neutral globe remains visible while the
-    // texture downloads, so a transient tile failure never produces black VR.
-    new TextureLoader().load(
-      'https://tile.openstreetmap.org/0/0/0.png',
-      (texture) => { material.map = texture; material.needsUpdate = true; },
-    );
+    // Never place a Web-Mercator XYZ tile directly on a sphere: its UVs are
+    // equirectangular and would make the globe disagree with the close tiles.
+    // This overview is reprojected from the same provider used by the surface.
+    void createGlobalOverviewTexture(CARTO_VOYAGER)
+      .then((texture) => { material.map = texture; material.needsUpdate = true; })
+      .catch(() => undefined);
 
     for (let index = 0; index < 2; index += 1) {
       const controller = this.renderer.xr.getController(index);

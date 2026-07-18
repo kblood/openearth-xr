@@ -25,12 +25,13 @@ view). The right trigger flies toward the pointed location and
 the left trigger provides a slow precision flight. **Exit VR** ends the
 session and restores the desktop viewer.
 
-The headset uses a two-stage map surface: a global globe for orbital context,
-then a single tangent map panel that assembles a visible 5×5 XYZ tile mosaic
-as the viewer approaches the surface. This keeps country, city, and street
-maps continuous across the view instead of showing isolated tiles or mirrored
-labels. A hard minimum distance prevents navigation from entering the globe.
-The
+The headset uses a two-stage map surface: a global Web-Mercator overview is
+reprojected onto the globe, then a visible 5×5 XYZ tile mosaic is draped over
+a curved, compass-aligned spherical cap as the viewer approaches the surface.
+Both layers use the same geographic convention, so country, city, and street
+maps remain centred on the location being viewed rather than jumping to an
+unrelated tile. A hard minimum distance prevents navigation from entering the
+globe. The
 default is CARTO Voyager, a readable Latin-script road style derived from OSM;
 the tile provider is isolated behind a configuration seam for a future
 Danish-only style or self-hosted service.
@@ -51,9 +52,9 @@ OpenEarth will be its own project. It will define an adapter for portable, offli
 
 Early Google-Earth-like viewer. Map imagery and orbital-to-ground camera travel
 are implemented on desktop. The headset view now uses Three.js's WebXR
-compositor integration (rather than manual per-eye rendering) with controller
-orbit/distance/reset input. Open terrain, search, high-detail XR tiles, and
-offline bundles are planned layers.
+compositor integration (rather than manual per-eye rendering), geographically
+aligned globe-to-surface tiles, and controller orbit/distance/reset input.
+Open terrain, search, and offline bundles are planned layers.
 
 ## License
 
