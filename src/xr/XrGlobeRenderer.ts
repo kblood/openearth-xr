@@ -44,6 +44,7 @@ export class XrGlobeRenderer {
   private readonly worldForward = new Vector3(0, 0, 1);
   private readonly grabStartController = new Quaternion();
   private readonly currentController = new Quaternion();
+  private readonly rayQuaternion = new Quaternion();
   private readonly grabStartPlanet = new Quaternion();
   private readonly inverseGrabStart = new Quaternion();
   private readonly grabStartControllerPosition = new Vector3();
@@ -127,7 +128,9 @@ export class XrGlobeRenderer {
     this.planetRig.position.set(0, 1.6, -Math.max(EARTH_RADIUS + MIN_ALTITUDE, distance));
     const lon = MathUtils.degToRad(longitude);
     const lat = MathUtils.degToRad(latitude);
-    this.previewTarget.set(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon));
+    // Match SphereGeometry's equirectangular convention: longitude increases
+    // toward local -Z. The detailed tile shell uses the same handedness.
+    this.previewTarget.set(Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon));
     this.planetRig.quaternion.setFromUnitVectors(this.previewTarget, this.worldForward);
     this.planetRig.scale.setScalar(1);
     this.clock.start();
@@ -307,7 +310,11 @@ export class XrGlobeRenderer {
   }
 
   private flyAlongRay(controller: Group, delta: number, speed: number): void {
-    controller.getWorldDirection(this.controllerDirection);
+    // WebXR target rays point along controller-local -Z. Object3D's generic
+    // getWorldDirection uses +Z for a Group, which made trigger flight move
+    // the globe away and looked like a non-working zoom control.
+    controller.getWorldQuaternion(this.rayQuaternion);
+    this.controllerDirection.set(0, 0, -1).applyQuaternion(this.rayQuaternion).normalize();
     const altitude = Math.max(MIN_ALTITUDE, this.planetRig.position.distanceTo(this.cameraPosition) - EARTH_RADIUS);
     const altitudeSpeed = Math.min(14, Math.max(0.06, altitude * 1.3));
     this.planetRig.position.addScaledVector(this.controllerDirection, -delta * speed * altitudeSpeed);

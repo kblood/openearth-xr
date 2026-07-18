@@ -44,23 +44,25 @@ WebXR renderer and pauses the Cesium canvas while a session is active. This is
 intentional: it gives the runtime control of both eye cameras and avoids a
 second desktop globe appearing in the headset. Controller input is attached
 through WebXR `connected` input sources; both standard Touch (axes 2/3) and
-trackpad (axes 0/1) layouts rotate/change globe distance, while trigger resets
-the orbital view. Single-controller grip applies controller translation and
+trackpad (axes 0/1) layouts rotate/change globe distance. Trigger flight uses
+the WebXR target ray's local `-Z` direction. Single-controller grip applies controller translation and
 rotation to the globe; dual grip applies a midpoint-preserving transform where
 hand separation changes camera-to-globe distance (never field of view or world
 scale) and the hand-to-hand vector rotates it. Flight and stick zoom use that
 same distance, with speed proportional to altitude and clamped near the
 surface.
 The map surface is a two-stage renderer. An orbital parent globe receives a
-small Web-Mercator XYZ mosaic reprojected to equirectangular UVs; this avoids
+Web-Mercator XYZ overview reprojected to equirectangular UVs; this avoids
 incorrectly stretching a single Mercator tile across a sphere. Near the
-surface, a 5×5 XYZ mosaic is draped on a curved spherical cap above the
-viewer-facing point. The cap has an explicit east/north/outward frame and its
-texture is fractionally centred on the selected geographic coordinate. Its size
-is derived from physical altitude and camera FOV, so it continuously covers the
-view as tile zoom rises from country to city to streets. This avoids gaps,
-flat-map transitions, mirrored labels, and unrelated-tile jumps, while a
-minimum radial distance prevents the viewer entering the globe.
+surface, an atomic 6×6 atlas is loaded at a zoom chosen from physical altitude,
+camera FOV, aspect ratio, and Mercator latitude stretch. Every atlas vertex is
+converted from its exact XYZ coordinate to longitude/latitude and placed on the
+same sphere. Both renderers use SphereGeometry's convention that eastward
+longitude points toward local `-Z`, and the curved atlas renders front faces
+only. Obsolete atlas fetches are aborted while the last complete atlas stays
+visible. This avoids blank zoom frames, gaps, flat-map transitions, mirrored
+labels, and unrelated-tile jumps, while a minimum radial distance prevents the
+viewer entering the globe.
 
 1. Controller ray targeting, teleport-to-place, and landmark selection.
 2. Tile cache abstraction and open terrain provider.
