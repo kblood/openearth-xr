@@ -1,16 +1,21 @@
 {
   "name": "openearth-xr",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "release": "powershell -ExecutionPolicy Bypass -File scripts/release.ps1"
   },
   "devDependencies": {
     "@types/webxr": "^0.5.22",
     "typescript": "^5.8.3",
-    "vite": "^6.2.2"
+    "vite": "^6.2.2",
+    "vite-plugin-static-copy": "^4.1.1"
+  },
+  "dependencies": {
+    "cesium": "^1.143.0"
   }
 }

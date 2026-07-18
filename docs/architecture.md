@@ -19,7 +19,11 @@ Scene model: camera, planet, terrain, vector overlays
 Bundle adapter ── cache/storage ── optional network providers
 ```
 
-`GlobeRenderer` is deliberately small: it owns the WebGL context, normal desktop animation loop, and an `XRWebGLLayer` loop. It is the seam where stereo camera projection, terrain tiles, and XR controllers will be added.
+The first renderer is CesiumJS: it supplies the WGS84 globe, quadtree imagery,
+and camera precision required to move continuously from space to city scale.
+OpenStreetMap is the default public imagery source; terrain is deliberately a
+provider seam so a future build can use open DEM data or verified offline
+bundles without an account/token requirement.
 
 ## Offline regional bundle contract (planned)
 
@@ -34,8 +38,13 @@ An adapter can then translate OpenMaps-compatible regional exports into this con
 
 ## Roadmap
 
-1. Add real camera matrices and stereoscopic XR projection.
-2. Tile pyramid and local cache abstraction.
+The immersive renderer owns a dedicated XR-compatible WebGL context because
+CesiumJS does not yet drive a WebXR compositor loop. It renders the globe to
+the headset and maps controller thumbsticks/trackpads to rotate and fly/scale,
+with the trigger resetting orbital scale. The desktop and XR camera models are
+kept intentionally equivalent.
+
+1. Controller ray targeting, teleport-to-place, and landmark selection.
+2. Tile cache abstraction and open terrain provider.
 3. OpenStreetMap vector overlay plus terrain/imagery provider adapters.
 4. Offline bundle manifest and OpenMaps-compatible export adapter.
-5. VR interaction: ray selection, teleport/fly controls, scale modes, and landmarks.

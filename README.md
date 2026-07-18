@@ -2,7 +2,11 @@
 
 OpenEarth XR is an open-source, WebXR-first globe explorer: an independent foundation for a Google-Earth-like experience that works on the desktop today and in VR where browsers expose WebXR.
 
-This initial milestone renders an interactive procedural globe, supports mouse/touch rotation and zoom, and can enter an `immersive-vr` session. It intentionally has no map-data dependency yet.
+The current viewer uses a real ellipsoidal Earth with OpenStreetMap imagery and
+continuous camera travel from orbital scale to city scale. Desktop controls
+follow the familiar Earth-viewer model: left-drag orbits, right-drag tilts,
+the wheel flies, and double-click travels to a point. Built-in place controls
+provide Earth, Denmark, and Copenhagen viewpoints.
 
 ## Run
 
@@ -11,7 +15,19 @@ npm install
 npm run dev
 ```
 
-Use a recent WebGL 2 browser. For VR, serve over HTTPS (or localhost) in a WebXR-capable browser with an enabled headset.
+Use a recent WebGL 2 browser. On a WebXR headset/browser, **Enter VR** starts
+an immersive compositor session. Look naturally around the planet; controller
+thumbsticks/trackpads rotate and fly/scale the globe, and the trigger resets a
+comfortable orbital view. This follows the same simple orbit/fly/reset model
+as Google Earth VR while remaining browser-native and open source.
+
+## Release
+
+```powershell
+npm run release
+```
+
+This atomically deploys the built site to `https://dionysus.dk/openearth/`.
 
 ## Direction
 
@@ -19,7 +35,9 @@ OpenEarth will be its own project. It will define an adapter for portable, offli
 
 ## Status
 
-Experimental foundation, not a replacement for Google Earth. The globe texture is procedural placeholder terrain; imagery, terrain, search, and offline bundle loading are planned layers.
+Early Google-Earth-like viewer. Map imagery, orbital-to-ground camera travel,
+and immersive WebXR orbit/fly/reset locomotion are implemented. Open terrain,
+search, and offline bundles are planned layers.
 
 ## License
 
