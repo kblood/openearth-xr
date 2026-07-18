@@ -45,7 +45,11 @@ intentional: it gives the runtime control of both eye cameras and avoids a
 second desktop globe appearing in the headset. Controller input is attached
 through WebXR `connected` input sources; both standard Touch (axes 2/3) and
 trackpad (axes 0/1) layouts rotate/change globe distance, while trigger resets
-the orbital view.
+the orbital view. The map surface is a visible-only Web-Mercator XYZ tile
+layer over a low-resolution parent globe: curved country/city/street tiles are
+selected around the current viewer-facing location, loaded with a bounded
+concurrency/cache, and evicted with their GPU resources. This enables detailed
+mapping without bulk-prefetching a world tile pyramid.
 
 1. Controller ray targeting, teleport-to-place, and landmark selection.
 2. Tile cache abstraction and open terrain provider.

@@ -17,10 +17,19 @@ npm run dev
 
 Use a recent WebGL 2 browser. On a WebXR headset/browser, **Enter VR** starts
 a dedicated immersive compositor session; the desktop Cesium canvas is paused,
-so the headset receives one globe only. Look naturally around it. Either
-controller thumbstick/trackpad rotates the Earth sideways and changes its
-distance vertically; the trigger resets a comfortable orbital view. **Exit
-VR** ends the session and restores the desktop viewer.
+so the headset receives one globe only. Look naturally around it. The right
+grip directly grabs and turns the globe; its trigger flies toward the pointed
+location, while the left trigger provides a slow precision flight. The left
+stick pans, and the right stick controls heading and distance. **Exit VR**
+ends the session and restores the desktop viewer.
+
+The headset globe streams only the currently visible OpenStreetMap XYZ tiles:
+country labels at orbital scale, then city and street labels as flight brings
+the surface closer. It keeps a bounded in-memory cache and does not prefetch
+the world. The built-in OSM Standard source is for normal interactive use;
+production deployments with sustained traffic should configure a hosted tile
+provider or self-hosted open tile service, in line with the [OSM tile
+policy](https://operations.osmfoundation.org/policies/tiles/).
 
 ## Release
 

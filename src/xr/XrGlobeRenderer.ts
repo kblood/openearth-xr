@@ -10,12 +10,18 @@ import {
   Scene,
   SphereGeometry,
   TextureLoader,
+  Quaternion,
+  Vector3,
   WebGLRenderer,
 } from 'three';
+import { OPEN_STREET_MAP, XyzTileGlobe } from './XyzTileGlobe';
 
 const STARTING_YAW = -0.8;
-const STARTING_SCALE = 1;
 const DEAD_ZONE = 0.12;
+const EARTH_RADIUS = 1.45;
+
+type Hand = 'left' | 'right';
+type HandState = { source: XRInputSource; controller: Group; trigger: boolean; squeeze: boolean };
 
 /**
  * A single, compositor-owned Three.js scene for immersive presentation.
@@ -28,7 +34,16 @@ export class XrGlobeRenderer {
   private readonly camera = new PerspectiveCamera(65, 1, 0.05, 30);
   private readonly planetRig = new Group();
   private readonly clock = new Clock();
-  private readonly controllers = new Map<number, XRInputSource>();
+  private readonly hands = new Map<Hand, HandState>();
+  private readonly tiles = new XyzTileGlobe(EARTH_RADIUS, OPEN_STREET_MAP);
+  private readonly cameraPosition = new Vector3();
+  private readonly cameraInGlobeSpace = new Vector3();
+  private readonly controllerDirection = new Vector3();
+  private readonly worldUp = new Vector3(0, 1, 0);
+  private readonly grabStartController = new Quaternion();
+  private readonly currentController = new Quaternion();
+  private readonly grabStartPlanet = new Quaternion();
+  private readonly inverseGrabStart = new Quaternion();
   private session: XRSession | null = null;
   private onEnd: (() => void) | null = null;
 
@@ -47,11 +62,12 @@ export class XrGlobeRenderer {
     this.scene.add(sun);
 
     const material = new MeshBasicMaterial({ color: 0xd9e7f5 });
-    const earth = new Mesh(new SphereGeometry(1.45, 64, 48), material);
+    const earth = new Mesh(new SphereGeometry(EARTH_RADIUS, 64, 48), material);
     earth.rotation.y = Math.PI;
     this.planetRig.position.set(0, 1.35, -3.3);
     this.planetRig.rotation.y = STARTING_YAW;
     this.planetRig.add(earth);
+    this.planetRig.add(this.tiles.group);
     this.scene.add(this.planetRig);
 
     // OSM permits CORS image use. A neutral globe remains visible while the
@@ -63,9 +79,17 @@ export class XrGlobeRenderer {
 
     for (let index = 0; index < 2; index += 1) {
       const controller = this.renderer.xr.getController(index);
-      controller.addEventListener('connected', (event: { data: XRInputSource }) => this.controllers.set(index, event.data));
-      controller.addEventListener('disconnected', () => this.controllers.delete(index));
-      controller.addEventListener('selectstart', () => this.reset());
+      controller.addEventListener('connected', (event: { data: XRInputSource }) => {
+        const hand = event.data.handedness;
+        if (hand === 'left' || hand === 'right') this.hands.set(hand, { source: event.data, controller, trigger: false, squeeze: false });
+      });
+      controller.addEventListener('disconnected', () => {
+        for (const [hand, state] of this.hands) if (state.controller === controller) this.hands.delete(hand);
+      });
+      controller.addEventListener('selectstart', () => this.setTrigger(controller, true));
+      controller.addEventListener('selectend', () => this.setTrigger(controller, false));
+      controller.addEventListener('squeezestart', () => this.startGrab(controller));
+      controller.addEventListener('squeezeend', () => this.endGrab(controller));
       this.scene.add(controller);
     }
   }
@@ -99,7 +123,7 @@ export class XrGlobeRenderer {
 
   private readonly handleSessionEnd = (): void => {
     this.renderer.setAnimationLoop(null);
-    this.controllers.clear();
+    this.hands.clear();
     this.session = null;
     this.canvas.hidden = true;
     const callback = this.onEnd;
@@ -110,28 +134,80 @@ export class XrGlobeRenderer {
   private readonly render = (): void => {
     const delta = Math.min(this.clock.getDelta(), 1 / 30);
     this.applyControllerInput(delta);
+    const xrCamera = this.renderer.xr.getCamera();
+    this.cameraPosition.setFromMatrixPosition(xrCamera.matrixWorld);
+    this.cameraInGlobeSpace.copy(this.cameraPosition);
+    this.planetRig.worldToLocal(this.cameraInGlobeSpace);
+    this.tiles.update(this.cameraInGlobeSpace);
     this.renderer.render(this.scene, this.camera);
   };
 
   private applyControllerInput(delta: number): void {
-    for (const source of this.controllers.values()) {
-      const axes = source.gamepad?.axes;
-      if (!axes || axes.length < 2) continue;
-      // Quest Touch exposes stick axes at 2/3. Some trackpads expose them at
-      // 0/1, so support both layouts instead of silently ignoring controls.
-      const horizontal = axes[2] ?? axes[0] ?? 0;
-      const vertical = axes[3] ?? axes[1] ?? 0;
-      if (Math.abs(horizontal) > DEAD_ZONE) this.planetRig.rotation.y -= horizontal * delta * 1.65;
-      if (Math.abs(vertical) > DEAD_ZONE) {
-        const nextScale = this.planetRig.scale.x * Math.exp(-vertical * delta * 1.1);
-        const scale = Math.min(2.8, Math.max(0.18, nextScale));
-        this.planetRig.scale.setScalar(scale);
-      }
+    const left = this.hands.get('left');
+    const right = this.hands.get('right');
+    if (left) {
+      const [x, y] = this.activeAxes(left.source);
+      // Left stick pans the world below the viewer instead of duplicating
+      // rotation. It is deliberately separate from the right-hand heading.
+      if (Math.abs(x) > DEAD_ZONE) this.planetRig.rotateOnWorldAxis(this.worldUp, -x * delta * 0.9);
+      if (Math.abs(y) > DEAD_ZONE) this.planetRig.rotateX(-y * delta * 0.72);
     }
+    if (right && !right.squeeze) {
+      const [x, y] = this.activeAxes(right.source);
+      if (Math.abs(x) > DEAD_ZONE) this.planetRig.rotateOnWorldAxis(this.worldUp, -x * delta * 1.35);
+      if (Math.abs(y) > DEAD_ZONE) this.moveAlongView(y * delta * 1.45);
+    }
+    if (right?.squeeze) this.updateGrab(right.controller);
+    if (right?.trigger) this.flyAlongRay(right.controller, delta, 1);
+    if (left?.trigger) this.flyAlongRay(left.controller, delta, 0.28);
   }
 
   private reset(): void {
     this.planetRig.rotation.y = STARTING_YAW;
-    this.planetRig.scale.setScalar(STARTING_SCALE);
+    this.planetRig.position.set(0, 1.35, -3.3);
+  }
+
+  private activeAxes(source: XRInputSource): [number, number] {
+    const axes = source.gamepad?.axes;
+    if (!axes || axes.length < 2) return [0, 0];
+    const first = [axes[0] ?? 0, axes[1] ?? 0] as [number, number];
+    const second = axes.length >= 4 ? [axes[2] ?? 0, axes[3] ?? 0] as [number, number] : first;
+    // Some runtimes retain a zeroed 2/3 pair. Choose the pair the user is
+    // actually moving rather than relying on a nullish fallback.
+    return Math.hypot(...first) > Math.hypot(...second) ? first : second;
+  }
+
+  private setTrigger(controller: Group, active: boolean): void {
+    for (const state of this.hands.values()) if (state.controller === controller) state.trigger = active;
+  }
+
+  private startGrab(controller: Group): void {
+    const right = this.hands.get('right');
+    if (!right || right.controller !== controller) return;
+    right.squeeze = true;
+    controller.getWorldQuaternion(this.grabStartController);
+    this.grabStartPlanet.copy(this.planetRig.quaternion);
+  }
+
+  private endGrab(controller: Group): void {
+    const right = this.hands.get('right');
+    if (right?.controller === controller) right.squeeze = false;
+  }
+
+  private updateGrab(controller: Group): void {
+    controller.getWorldQuaternion(this.currentController);
+    this.inverseGrabStart.copy(this.grabStartController).invert();
+    this.currentController.multiply(this.inverseGrabStart).multiply(this.grabStartPlanet);
+    this.planetRig.quaternion.copy(this.currentController);
+  }
+
+  private flyAlongRay(controller: Group, delta: number, speed: number): void {
+    controller.getWorldDirection(this.controllerDirection);
+    this.planetRig.position.addScaledVector(this.controllerDirection, -delta * speed * 1.15);
+  }
+
+  private moveAlongView(amount: number): void {
+    this.cameraInGlobeSpace.copy(this.planetRig.position).normalize();
+    this.planetRig.position.addScaledVector(this.cameraInGlobeSpace, amount);
   }
 }

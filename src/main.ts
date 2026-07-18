@@ -99,7 +99,7 @@ function enterXrUi(): void {
   document.body.classList.add('xr-active');
   vrButton!.disabled = false;
   vrButton!.textContent = 'Exit VR';
-  status!.textContent = 'VR: use either thumbstick/trackpad—sideways rotates the Earth, up/down changes its distance. Trigger recentres.';
+  status!.textContent = 'VR: right grip grabs the globe · right trigger flies toward its ray · left trigger flies slowly · left stick pans · right stick turns/zooms.';
 }
 
 if (!navigator.xr) {
