@@ -57,11 +57,11 @@ export class XrGlobeRenderer {
   private readonly dualCurrentMidpoint = new Vector3();
   private readonly dualCurrentVector = new Vector3();
   private readonly dualOffset = new Vector3();
+  private readonly dualViewOffset = new Vector3();
   private readonly dualRotation = new Quaternion();
   private readonly dualStartPlanet = new Quaternion();
-  private grabStartScale = 1;
-  private dualStartScale = 1;
   private dualStartDistance = 1;
+  private dualStartViewDistance = 1;
   private session: XRSession | null = null;
   private onEnd: (() => void) | null = null;
 
@@ -174,7 +174,7 @@ export class XrGlobeRenderer {
     if (right && !grabbing) {
       const [x, y] = this.activeAxes(right.source);
       if (Math.abs(x) > DEAD_ZONE) this.planetRig.rotateOnWorldAxis(this.worldUp, -x * delta * 1.35);
-      if (Math.abs(y) > DEAD_ZONE) this.moveAlongView(y * delta * 1.45);
+      if (Math.abs(y) > DEAD_ZONE) this.moveRadially(y, delta);
     }
     if (left?.squeeze && right?.squeeze) this.updateDualGrab(left.controller, right.controller);
     else if (right?.squeeze) this.updateSingleGrab(right.controller);
@@ -186,6 +186,7 @@ export class XrGlobeRenderer {
   private reset(): void {
     this.planetRig.rotation.y = STARTING_YAW;
     this.planetRig.position.set(0, 1.35, -3.3);
+    this.planetRig.scale.setScalar(1);
   }
 
   private activeAxes(source: XRInputSource): [number, number] {
@@ -225,7 +226,6 @@ export class XrGlobeRenderer {
     controller.getWorldQuaternion(this.grabStartController);
     this.grabStartPlanetPosition.copy(this.planetRig.position);
     this.grabStartPlanet.copy(this.planetRig.quaternion);
-    this.grabStartScale = this.planetRig.scale.x;
   }
 
   private updateSingleGrab(controller: Group): void {
@@ -235,7 +235,6 @@ export class XrGlobeRenderer {
     this.currentController.multiply(this.inverseGrabStart).multiply(this.grabStartPlanet);
     this.planetRig.quaternion.copy(this.currentController);
     this.planetRig.position.copy(this.currentControllerPosition).sub(this.grabStartControllerPosition).add(this.grabStartPlanetPosition);
-    this.planetRig.scale.setScalar(this.grabStartScale);
   }
 
   private captureDualGrab(left: Group, right: Group): void {
@@ -247,7 +246,7 @@ export class XrGlobeRenderer {
     this.dualStartVector.normalize();
     this.dualStartPlanetPosition.copy(this.planetRig.position);
     this.dualStartPlanet.copy(this.planetRig.quaternion);
-    this.dualStartScale = this.planetRig.scale.x;
+    this.dualStartViewDistance = Math.max(EARTH_RADIUS + 0.04, this.dualStartPlanetPosition.distanceTo(this.cameraPosition));
   }
 
   private updateDualGrab(left: Group, right: Group): void {
@@ -256,17 +255,19 @@ export class XrGlobeRenderer {
     this.dualCurrentMidpoint.copy(this.dualCurrentLeft).add(this.dualCurrentRight).multiplyScalar(0.5);
     this.dualCurrentVector.copy(this.dualCurrentRight).sub(this.dualCurrentLeft);
     const distance = Math.max(0.03, this.dualCurrentVector.length());
-    const scale = Math.min(18, Math.max(0.06, this.dualStartScale * distance / this.dualStartDistance));
+    const pinchRatio = distance / this.dualStartDistance;
     this.dualCurrentVector.normalize();
     this.dualRotation.setFromUnitVectors(this.dualStartVector, this.dualCurrentVector);
     this.planetRig.quaternion.copy(this.dualRotation).multiply(this.dualStartPlanet);
-    // Keep the point between the hands stable while preserving the user's
-    // stretch/pinch scale: moving both hands carries the globe; separating
-    // them zooms in and bringing them together zooms out.
+    // Keep the globe carried by the midpoint, then apply pinch as *distance*
+    // to the globe—not camera FoV or world scale. This keeps every control on
+    // the same physical zoom model and gives tile LOD a stable altitude.
     this.dualOffset.copy(this.dualStartPlanetPosition).sub(this.dualStartMidpoint)
-      .applyQuaternion(this.dualRotation).multiplyScalar(scale / this.dualStartScale);
+      .applyQuaternion(this.dualRotation);
     this.planetRig.position.copy(this.dualCurrentMidpoint).add(this.dualOffset);
-    this.planetRig.scale.setScalar(scale);
+    this.dualViewOffset.copy(this.planetRig.position).sub(this.cameraPosition);
+    const viewDistance = Math.min(36, Math.max(EARTH_RADIUS + 0.04, this.dualStartViewDistance / pinchRatio));
+    this.planetRig.position.copy(this.cameraPosition).addScaledVector(this.dualViewOffset.normalize(), viewDistance);
   }
 
   private handFor(controller: Group): HandState | undefined {
@@ -275,11 +276,17 @@ export class XrGlobeRenderer {
 
   private flyAlongRay(controller: Group, delta: number, speed: number): void {
     controller.getWorldDirection(this.controllerDirection);
-    this.planetRig.position.addScaledVector(this.controllerDirection, -delta * speed * 1.15);
+    const altitude = Math.max(0.025, this.planetRig.position.distanceTo(this.cameraPosition) - EARTH_RADIUS);
+    const altitudeSpeed = Math.min(14, Math.max(0.06, altitude * 1.3));
+    this.planetRig.position.addScaledVector(this.controllerDirection, -delta * speed * altitudeSpeed);
   }
 
-  private moveAlongView(amount: number): void {
-    this.cameraInGlobeSpace.copy(this.planetRig.position).normalize();
-    this.planetRig.position.addScaledVector(this.cameraInGlobeSpace, amount);
+  private moveRadially(input: number, delta: number): void {
+    this.dualViewOffset.copy(this.planetRig.position).sub(this.cameraPosition);
+    const distance = this.dualViewOffset.length();
+    const altitude = Math.max(0.025, distance - EARTH_RADIUS);
+    const speed = Math.min(14, Math.max(0.06, altitude * 1.3));
+    const nextDistance = Math.min(36, Math.max(EARTH_RADIUS + 0.04, distance + input * delta * speed));
+    this.planetRig.position.copy(this.cameraPosition).addScaledVector(this.dualViewOffset.normalize(), nextDistance);
   }
 }

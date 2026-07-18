@@ -47,7 +47,10 @@ through WebXR `connected` input sources; both standard Touch (axes 2/3) and
 trackpad (axes 0/1) layouts rotate/change globe distance, while trigger resets
 the orbital view. Single-controller grip applies controller translation and
 rotation to the globe; dual grip applies a midpoint-preserving transform where
-hand separation changes globe scale and the hand-to-hand vector rotates it.
+hand separation changes camera-to-globe distance (never field of view or world
+scale) and the hand-to-hand vector rotates it. Flight and stick zoom use that
+same distance, with speed proportional to altitude and clamped near the
+surface.
 The map surface is a visible-only Web-Mercator XYZ tile layer over a
 low-resolution parent globe: coarse regional, city, and street tiles remain
 nested around the current viewer-facing location, loaded with a bounded

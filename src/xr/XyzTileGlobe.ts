@@ -210,7 +210,10 @@ export class XyzTileGlobe {
         positions[vertex * 3] = radius * cosLat * Math.cos(longitude);
         positions[vertex * 3 + 1] = radius * Math.sin(latitude);
         positions[vertex * 3 + 2] = radius * cosLat * Math.sin(longitude);
-        uvs[vertex * 2] = ix / SEGMENTS;
+        // The outward-facing globe coordinate system looks along +Z, while
+        // XYZ rasters increase x toward the east. Reverse U at the sampler so
+        // roads and labels read normally instead of appearing in a mirror.
+        uvs[vertex * 2] = 1 - ix / SEGMENTS;
         uvs[vertex * 2 + 1] = 1 - iy / SEGMENTS;
         vertex += 1;
       }

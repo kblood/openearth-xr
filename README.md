@@ -20,13 +20,15 @@ a dedicated immersive compositor session; the desktop Cesium canvas is paused,
 so the headset receives one globe only. Look naturally around it. Grip either
 controller to pick up, carry, and turn the globe. Grip both controllers to
 move it with both hands, twist it, or pinch/stretch the distance between your
-hands to zoom out/in. The right trigger flies toward the pointed location and
+hands to change the actual distance to the globe (not the headset field of
+view). The right trigger flies toward the pointed location and
 the left trigger provides a slow precision flight. **Exit VR** ends the
 session and restores the desktop viewer.
 
 The headset globe streams visible XYZ tiles in three nested levels: a coarse
 regional context, a city layer, and a local street layer. They remain layered
-as you zoom so detailed tiles do not collapse into an isolated patch. The
+as you zoom so detailed tiles do not collapse into an isolated patch or mirror
+their labels. The
 default is CARTO Voyager, a readable Latin-script road style derived from OSM;
 the tile provider is isolated behind a configuration seam for a future
 Danish-only style or self-hosted service.
