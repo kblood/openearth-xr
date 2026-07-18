@@ -20,8 +20,11 @@ a dedicated immersive compositor session; the desktop Cesium canvas is paused,
 so the headset receives one globe only. Look naturally around it. Grip either
 controller to pick up, carry, and turn the globe. Grip both controllers to
 move it with both hands, twist it, or pinch/stretch the distance between your
-hands to change the actual distance to the globe (not the headset field of
-view). The right trigger flies toward the pointed location and
+hands to descend or climb (the headset field of view never changes). At orbital
+altitude this changes camera-to-globe distance. Below the flight threshold,
+Earth scales up while the surface stays comfortably in front of the viewer,
+allowing continuous travel through aircraft, city, street, and building scale.
+The right trigger flies toward the pointed location and
 the left trigger provides a slow precision flight. **Exit VR** ends the
 session and restores the desktop viewer.
 
@@ -32,8 +35,8 @@ surface. Both layers use Three.js' equirectangular longitude convention, so
 country, city, and street maps remain readable and centred on the location
 being viewed rather than mirroring or jumping to an unrelated tile. Atlas LOD
 changes only at discrete zoom thresholds and obsolete downloads are cancelled,
-so detail continues to update during fast flight. A hard minimum distance
-prevents navigation from entering the globe. The
+so detail continues to update during fast flight. A hard minimum clearance
+from the scaled surface prevents navigation from entering the globe. The
 default is CARTO Voyager, a readable Latin-script road style derived from OSM;
 the tile provider is isolated behind a configuration seam for a future
 Danish-only style or self-hosted service.
@@ -56,6 +59,8 @@ Early Google-Earth-like viewer. Map imagery and orbital-to-ground camera travel
 are implemented on desktop. The headset view now uses Three.js's WebXR
 compositor integration (rather than manual per-eye rendering), geographically
 aligned globe-to-surface tiles, and controller grab/orbit/distance/flight input.
+The immersive navigation model now continues from orbit through building-level
+map detail without placing a small globe around the viewer.
 Open terrain, search, and offline bundles are planned layers.
 
 ## License

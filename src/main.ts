@@ -107,7 +107,12 @@ function enterXrUi(): void {
 if (Number.isFinite(xrPreview) && xrPreview > 0) {
   viewer.useDefaultRenderLoop = false;
   document.body.classList.add('xr-active');
-  xrGlobe.startPreview(xrPreview, Number(previewParams.get('lon') ?? 10.2), Number(previewParams.get('lat') ?? 56.1));
+  xrGlobe.startPreview(
+    xrPreview,
+    Number(previewParams.get('lon') ?? 10.2),
+    Number(previewParams.get('lat') ?? 56.1),
+    Number(previewParams.get('xrScale') ?? 1),
+  );
 } else if (!navigator.xr) {
   vrButton.disabled = true;
   vrButton.textContent = 'WebXR unavailable';

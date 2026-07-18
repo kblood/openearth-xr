@@ -47,15 +47,25 @@ through WebXR `connected` input sources; both standard Touch (axes 2/3) and
 trackpad (axes 0/1) layouts rotate/change globe distance. Trigger flight uses
 the WebXR target ray's local `-Z` direction. Single-controller grip applies controller translation and
 rotation to the globe; dual grip applies a midpoint-preserving transform where
-hand separation changes camera-to-globe distance (never field of view or world
-scale) and the hand-to-hand vector rotates it. Flight and stick zoom use that
-same distance, with speed proportional to altitude and clamped near the
-surface.
+hand separation changes one shared virtual altitude and the hand-to-hand vector
+rotates it. Flight, pinch, and stick zoom all use this altitude; field of view
+never changes.
+
+Navigation has two continuous regimes. Above a globe-local altitude of `0.32`,
+Earth remains at scale 1 and travel changes physical camera-to-centre distance.
+Below that threshold, Earth scales smoothly up to 512× while its surface stays
+at a comfortable physical clearance. Globe-local altitude still decreases, so
+the tile selector advances from aircraft to city, street, and building LOD.
+Collision uses scaled radius plus physical clearance, rather than an unscaled
+fixed radius. A grabbed point rotates about the controller pivot, which keeps
+nearby terrain anchored after the scale transition.
+
 The map surface is a two-stage renderer. An orbital parent globe receives a
 Web-Mercator XYZ overview reprojected to equirectangular UVs; this avoids
 incorrectly stretching a single Mercator tile across a sphere. Near the
-surface, an atomic 6×6 atlas is loaded at a zoom chosen from physical altitude,
-camera FOV, aspect ratio, and Mercator latitude stretch. Every atlas vertex is
+surface, an atomic 6×6 atlas is loaded at a zoom chosen from globe-local virtual
+altitude, camera FOV, aspect ratio, and Mercator latitude stretch. Every atlas
+vertex is
 converted from its exact XYZ coordinate to longitude/latitude and placed on the
 same sphere. Both renderers use SphereGeometry's convention that eastward
 longitude points toward local `-Z`, and the curved atlas renders front faces

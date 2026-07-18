@@ -31,7 +31,9 @@ const TILE_GRID = 6;
 const CAP_SEGMENTS_PER_TILE = 8;
 const LOCAL_SURFACE_START = 1.6;
 const VIEW_OVERSCAN = 1.45;
-const SURFACE_OFFSET = 0.0008;
+// Must remain below XrGlobeRenderer's minimum virtual altitude. Polygon offset
+// handles coplanar depth ordering without placing the viewer inside this shell.
+const SURFACE_OFFSET = 0.00001;
 const MAX_MERCATOR_LATITUDE = MathUtils.degToRad(85.05112878);
 
 /**
