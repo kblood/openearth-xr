@@ -26,9 +26,20 @@ export const OPEN_STREET_MAP: XyzTileProvider = {
   maxZoom: 19,
 };
 
+// A readable Latin-script road-map style for the shipped viewer. Unlike the
+// OSM Standard raster, it does not intentionally favour each feature's local
+// name. Providers remain an explicit seam for a future Danish-only style.
+export const CARTO_VOYAGER: XyzTileProvider = {
+  id: 'carto-voyager',
+  url: (z, x, y) => `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`,
+  attribution: '© OpenStreetMap contributors © CARTO',
+  minZoom: 0,
+  maxZoom: 18,
+};
+
 const SEGMENTS = 8;
-const MAX_RESIDENT_TILES = 64;
-const MAX_VISIBLE_TILES = 25;
+const MAX_RESIDENT_TILES = 96;
+const MAX_VISIBLE_TILES = 48;
 
 type TileRecord = { mesh: Mesh; texture: Texture; lastUsed: number };
 
@@ -67,23 +78,39 @@ export class XyzTileGlobe {
     this.lastLevel = level;
     this.lastX = x;
     this.lastY = y;
-    this.showNeighbourhood(level, x, y);
+    this.showCoverage(level, x, y);
   }
 
-  private showNeighbourhood(z: number, centerX: number, centerY: number): void {
-    const count = 2 ** z;
-    const radius = z < 6 ? 2 : z < 11 ? 1 : 1;
+  private showCoverage(level: number, centerX: number, centerY: number): void {
     const nextVisible = new Set<string>();
+    // Preserve context: a wide coarse ring stays present beneath the regional
+    // and street-detail patches. Replacing all parents with only the new leaf
+    // was what made the previous build look like a shrinking single tile.
+    this.addNeighbourhood(nextVisible, Math.min(3, level), this.directionToTile(this.focus, Math.min(3, level)), 2);
+    if (level > 5) this.addNeighbourhood(nextVisible, Math.min(8, level), this.directionToTile(this.focus, Math.min(8, level)), 1);
+    if (level > 8) this.addNeighbourhood(nextVisible, level, { x: centerX, y: centerY }, 1);
+    if (level <= 5) this.addNeighbourhood(nextVisible, level, { x: centerX, y: centerY }, 2);
+    this.applyVisible(nextVisible);
+  }
+
+  private addNeighbourhood(nextVisible: Set<string>, z: number, center: { x: number; y: number }, radius: number): void {
+    const count = 2 ** z;
     for (let dy = -radius; dy <= radius; dy += 1) {
-      const y = centerY + dy;
+      const y = center.y + dy;
       if (y < 0 || y >= count) continue;
       for (let dx = -radius; dx <= radius; dx += 1) {
-        const x = (centerX + dx + count) % count;
-        const key = `${z}/${x}/${y}`;
+        const x = (center.x + dx + count) % count;
+        const key = `${this.provider.id}/${z}/${x}/${y}`;
         if (nextVisible.size >= MAX_VISIBLE_TILES) break;
         nextVisible.add(key);
-        this.ensureTile(z, x, y, key);
       }
+    }
+  }
+
+  private applyVisible(nextVisible: Set<string>): void {
+    for (const key of nextVisible) {
+      const [, z, x, y] = key.split('/');
+      this.ensureTile(Number(z), Number(x), Number(y), key);
     }
     for (const key of this.visible) {
       if (!nextVisible.has(key)) {

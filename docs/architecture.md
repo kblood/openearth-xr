@@ -45,9 +45,12 @@ intentional: it gives the runtime control of both eye cameras and avoids a
 second desktop globe appearing in the headset. Controller input is attached
 through WebXR `connected` input sources; both standard Touch (axes 2/3) and
 trackpad (axes 0/1) layouts rotate/change globe distance, while trigger resets
-the orbital view. The map surface is a visible-only Web-Mercator XYZ tile
-layer over a low-resolution parent globe: curved country/city/street tiles are
-selected around the current viewer-facing location, loaded with a bounded
+the orbital view. Single-controller grip applies controller translation and
+rotation to the globe; dual grip applies a midpoint-preserving transform where
+hand separation changes globe scale and the hand-to-hand vector rotates it.
+The map surface is a visible-only Web-Mercator XYZ tile layer over a
+low-resolution parent globe: coarse regional, city, and street tiles remain
+nested around the current viewer-facing location, loaded with a bounded
 concurrency/cache, and evicted with their GPU resources. This enables detailed
 mapping without bulk-prefetching a world tile pyramid.
 

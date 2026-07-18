@@ -17,19 +17,19 @@ npm run dev
 
 Use a recent WebGL 2 browser. On a WebXR headset/browser, **Enter VR** starts
 a dedicated immersive compositor session; the desktop Cesium canvas is paused,
-so the headset receives one globe only. Look naturally around it. The right
-grip directly grabs and turns the globe; its trigger flies toward the pointed
-location, while the left trigger provides a slow precision flight. The left
-stick pans, and the right stick controls heading and distance. **Exit VR**
-ends the session and restores the desktop viewer.
+so the headset receives one globe only. Look naturally around it. Grip either
+controller to pick up, carry, and turn the globe. Grip both controllers to
+move it with both hands, twist it, or pinch/stretch the distance between your
+hands to zoom out/in. The right trigger flies toward the pointed location and
+the left trigger provides a slow precision flight. **Exit VR** ends the
+session and restores the desktop viewer.
 
-The headset globe streams only the currently visible OpenStreetMap XYZ tiles:
-country labels at orbital scale, then city and street labels as flight brings
-the surface closer. It keeps a bounded in-memory cache and does not prefetch
-the world. The built-in OSM Standard source is for normal interactive use;
-production deployments with sustained traffic should configure a hosted tile
-provider or self-hosted open tile service, in line with the [OSM tile
-policy](https://operations.osmfoundation.org/policies/tiles/).
+The headset globe streams visible XYZ tiles in three nested levels: a coarse
+regional context, a city layer, and a local street layer. They remain layered
+as you zoom so detailed tiles do not collapse into an isolated patch. The
+default is CARTO Voyager, a readable Latin-script road style derived from OSM;
+the tile provider is isolated behind a configuration seam for a future
+Danish-only style or self-hosted service.
 
 ## Release
 

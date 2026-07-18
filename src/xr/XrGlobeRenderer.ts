@@ -14,7 +14,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
-import { OPEN_STREET_MAP, XyzTileGlobe } from './XyzTileGlobe';
+import { CARTO_VOYAGER, XyzTileGlobe } from './XyzTileGlobe';
 
 const STARTING_YAW = -0.8;
 const DEAD_ZONE = 0.12;
@@ -35,7 +35,7 @@ export class XrGlobeRenderer {
   private readonly planetRig = new Group();
   private readonly clock = new Clock();
   private readonly hands = new Map<Hand, HandState>();
-  private readonly tiles = new XyzTileGlobe(EARTH_RADIUS, OPEN_STREET_MAP);
+  private readonly tiles = new XyzTileGlobe(EARTH_RADIUS, CARTO_VOYAGER);
   private readonly cameraPosition = new Vector3();
   private readonly cameraInGlobeSpace = new Vector3();
   private readonly controllerDirection = new Vector3();
@@ -44,6 +44,24 @@ export class XrGlobeRenderer {
   private readonly currentController = new Quaternion();
   private readonly grabStartPlanet = new Quaternion();
   private readonly inverseGrabStart = new Quaternion();
+  private readonly grabStartControllerPosition = new Vector3();
+  private readonly grabStartPlanetPosition = new Vector3();
+  private readonly currentControllerPosition = new Vector3();
+  private readonly dualStartLeft = new Vector3();
+  private readonly dualStartRight = new Vector3();
+  private readonly dualStartMidpoint = new Vector3();
+  private readonly dualStartVector = new Vector3();
+  private readonly dualStartPlanetPosition = new Vector3();
+  private readonly dualCurrentLeft = new Vector3();
+  private readonly dualCurrentRight = new Vector3();
+  private readonly dualCurrentMidpoint = new Vector3();
+  private readonly dualCurrentVector = new Vector3();
+  private readonly dualOffset = new Vector3();
+  private readonly dualRotation = new Quaternion();
+  private readonly dualStartPlanet = new Quaternion();
+  private grabStartScale = 1;
+  private dualStartScale = 1;
+  private dualStartDistance = 1;
   private session: XRSession | null = null;
   private onEnd: (() => void) | null = null;
 
@@ -152,14 +170,17 @@ export class XrGlobeRenderer {
       if (Math.abs(x) > DEAD_ZONE) this.planetRig.rotateOnWorldAxis(this.worldUp, -x * delta * 0.9);
       if (Math.abs(y) > DEAD_ZONE) this.planetRig.rotateX(-y * delta * 0.72);
     }
-    if (right && !right.squeeze) {
+    const grabbing = left?.squeeze || right?.squeeze;
+    if (right && !grabbing) {
       const [x, y] = this.activeAxes(right.source);
       if (Math.abs(x) > DEAD_ZONE) this.planetRig.rotateOnWorldAxis(this.worldUp, -x * delta * 1.35);
       if (Math.abs(y) > DEAD_ZONE) this.moveAlongView(y * delta * 1.45);
     }
-    if (right?.squeeze) this.updateGrab(right.controller);
-    if (right?.trigger) this.flyAlongRay(right.controller, delta, 1);
-    if (left?.trigger) this.flyAlongRay(left.controller, delta, 0.28);
+    if (left?.squeeze && right?.squeeze) this.updateDualGrab(left.controller, right.controller);
+    else if (right?.squeeze) this.updateSingleGrab(right.controller);
+    else if (left?.squeeze) this.updateSingleGrab(left.controller);
+    if (!grabbing && right?.trigger) this.flyAlongRay(right.controller, delta, 1);
+    if (!grabbing && left?.trigger) this.flyAlongRay(left.controller, delta, 0.28);
   }
 
   private reset(): void {
@@ -182,23 +203,74 @@ export class XrGlobeRenderer {
   }
 
   private startGrab(controller: Group): void {
+    const state = this.handFor(controller);
+    if (!state) return;
+    state.squeeze = true;
+    const left = this.hands.get('left');
     const right = this.hands.get('right');
-    if (!right || right.controller !== controller) return;
-    right.squeeze = true;
-    controller.getWorldQuaternion(this.grabStartController);
-    this.grabStartPlanet.copy(this.planetRig.quaternion);
+    if (left?.squeeze && right?.squeeze) this.captureDualGrab(left.controller, right.controller);
+    else this.captureSingleGrab(controller);
   }
 
   private endGrab(controller: Group): void {
-    const right = this.hands.get('right');
-    if (right?.controller === controller) right.squeeze = false;
+    const state = this.handFor(controller);
+    if (!state) return;
+    state.squeeze = false;
+    const remaining = [...this.hands.values()].find((hand) => hand.squeeze);
+    if (remaining) this.captureSingleGrab(remaining.controller);
   }
 
-  private updateGrab(controller: Group): void {
+  private captureSingleGrab(controller: Group): void {
+    controller.getWorldPosition(this.grabStartControllerPosition);
+    controller.getWorldQuaternion(this.grabStartController);
+    this.grabStartPlanetPosition.copy(this.planetRig.position);
+    this.grabStartPlanet.copy(this.planetRig.quaternion);
+    this.grabStartScale = this.planetRig.scale.x;
+  }
+
+  private updateSingleGrab(controller: Group): void {
+    controller.getWorldPosition(this.currentControllerPosition);
     controller.getWorldQuaternion(this.currentController);
     this.inverseGrabStart.copy(this.grabStartController).invert();
     this.currentController.multiply(this.inverseGrabStart).multiply(this.grabStartPlanet);
     this.planetRig.quaternion.copy(this.currentController);
+    this.planetRig.position.copy(this.currentControllerPosition).sub(this.grabStartControllerPosition).add(this.grabStartPlanetPosition);
+    this.planetRig.scale.setScalar(this.grabStartScale);
+  }
+
+  private captureDualGrab(left: Group, right: Group): void {
+    left.getWorldPosition(this.dualStartLeft);
+    right.getWorldPosition(this.dualStartRight);
+    this.dualStartMidpoint.copy(this.dualStartLeft).add(this.dualStartRight).multiplyScalar(0.5);
+    this.dualStartVector.copy(this.dualStartRight).sub(this.dualStartLeft);
+    this.dualStartDistance = Math.max(0.03, this.dualStartVector.length());
+    this.dualStartVector.normalize();
+    this.dualStartPlanetPosition.copy(this.planetRig.position);
+    this.dualStartPlanet.copy(this.planetRig.quaternion);
+    this.dualStartScale = this.planetRig.scale.x;
+  }
+
+  private updateDualGrab(left: Group, right: Group): void {
+    left.getWorldPosition(this.dualCurrentLeft);
+    right.getWorldPosition(this.dualCurrentRight);
+    this.dualCurrentMidpoint.copy(this.dualCurrentLeft).add(this.dualCurrentRight).multiplyScalar(0.5);
+    this.dualCurrentVector.copy(this.dualCurrentRight).sub(this.dualCurrentLeft);
+    const distance = Math.max(0.03, this.dualCurrentVector.length());
+    const scale = Math.min(18, Math.max(0.06, this.dualStartScale * distance / this.dualStartDistance));
+    this.dualCurrentVector.normalize();
+    this.dualRotation.setFromUnitVectors(this.dualStartVector, this.dualCurrentVector);
+    this.planetRig.quaternion.copy(this.dualRotation).multiply(this.dualStartPlanet);
+    // Keep the point between the hands stable while preserving the user's
+    // stretch/pinch scale: moving both hands carries the globe; separating
+    // them zooms in and bringing them together zooms out.
+    this.dualOffset.copy(this.dualStartPlanetPosition).sub(this.dualStartMidpoint)
+      .applyQuaternion(this.dualRotation).multiplyScalar(scale / this.dualStartScale);
+    this.planetRig.position.copy(this.dualCurrentMidpoint).add(this.dualOffset);
+    this.planetRig.scale.setScalar(scale);
+  }
+
+  private handFor(controller: Group): HandState | undefined {
+    return [...this.hands.values()].find((state) => state.controller === controller);
   }
 
   private flyAlongRay(controller: Group, delta: number, speed: number): void {
