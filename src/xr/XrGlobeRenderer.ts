@@ -4,6 +4,7 @@ import {
   Color,
   DirectionalLight,
   Group,
+  MathUtils,
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
@@ -19,6 +20,7 @@ import { CARTO_VOYAGER, XyzTileGlobe } from './XyzTileGlobe';
 const STARTING_YAW = -0.8;
 const DEAD_ZONE = 0.12;
 const EARTH_RADIUS = 1.45;
+const MIN_ALTITUDE = 0.001;
 
 type Hand = 'left' | 'right';
 type HandState = { source: XRInputSource; controller: Group; trigger: boolean; squeeze: boolean };
@@ -31,7 +33,7 @@ type HandState = { source: XRInputSource; controller: Group; trigger: boolean; s
 export class XrGlobeRenderer {
   private readonly renderer: WebGLRenderer;
   private readonly scene = new Scene();
-  private readonly camera = new PerspectiveCamera(65, 1, 0.05, 30);
+  private readonly camera = new PerspectiveCamera(65, 1, 0.00005, 30);
   private readonly planetRig = new Group();
   private readonly clock = new Clock();
   private readonly hands = new Map<Hand, HandState>();
@@ -40,6 +42,7 @@ export class XrGlobeRenderer {
   private readonly cameraInGlobeSpace = new Vector3();
   private readonly controllerDirection = new Vector3();
   private readonly worldUp = new Vector3(0, 1, 0);
+  private readonly worldForward = new Vector3(0, 0, 1);
   private readonly grabStartController = new Quaternion();
   private readonly currentController = new Quaternion();
   private readonly grabStartPlanet = new Quaternion();
@@ -58,6 +61,7 @@ export class XrGlobeRenderer {
   private readonly dualCurrentVector = new Vector3();
   private readonly dualOffset = new Vector3();
   private readonly dualViewOffset = new Vector3();
+  private readonly previewTarget = new Vector3();
   private readonly dualRotation = new Quaternion();
   private readonly dualStartPlanet = new Quaternion();
   private dualStartDistance = 1;
@@ -114,12 +118,31 @@ export class XrGlobeRenderer {
 
   get active(): boolean { return this.session !== null; }
 
+  /** Development-only deterministic renderer used to inspect the exact tile
+   * coverage at a chosen physical camera-to-centre distance without a headset. */
+  startPreview(distance: number, longitude = 10.2, latitude = 56.1): void {
+    this.canvas.hidden = false;
+    this.renderer.setSize(window.innerWidth, window.innerHeight, false);
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+    this.camera.position.set(0, 1.6, 0);
+    this.planetRig.position.set(0, 1.6, -Math.max(EARTH_RADIUS + MIN_ALTITUDE, distance));
+    const lon = MathUtils.degToRad(longitude);
+    const lat = MathUtils.degToRad(latitude);
+    this.previewTarget.set(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon));
+    this.planetRig.quaternion.setFromUnitVectors(this.previewTarget, this.worldForward);
+    this.planetRig.scale.setScalar(1);
+    this.clock.start();
+    this.renderer.setAnimationLoop(this.renderPreview);
+  }
+
   async enter(onEnd: () => void, onStarted: () => void): Promise<void> {
     if (this.session) return;
     const xr = navigator.xr;
     if (!xr) throw new Error('WebXR is unavailable');
 
     const session = await xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor'] });
+    await session.updateRenderState({ depthNear: 0.00005 });
     this.canvas.hidden = false;
     this.session = session;
     this.onEnd = onEnd;
@@ -156,7 +179,16 @@ export class XrGlobeRenderer {
     this.cameraPosition.setFromMatrixPosition(xrCamera.matrixWorld);
     this.cameraInGlobeSpace.copy(this.cameraPosition);
     this.planetRig.worldToLocal(this.cameraInGlobeSpace);
-    this.tiles.update(this.cameraInGlobeSpace);
+    this.tiles.update(this.cameraInGlobeSpace, this.camera.fov, this.camera.aspect);
+    this.renderer.render(this.scene, this.camera);
+  };
+
+  private readonly renderPreview = (): void => {
+    this.scene.updateMatrixWorld();
+    this.cameraPosition.copy(this.camera.position);
+    this.cameraInGlobeSpace.copy(this.cameraPosition);
+    this.planetRig.worldToLocal(this.cameraInGlobeSpace);
+    this.tiles.update(this.cameraInGlobeSpace, this.camera.fov, this.camera.aspect);
     this.renderer.render(this.scene, this.camera);
   };
 
@@ -235,6 +267,7 @@ export class XrGlobeRenderer {
     this.currentController.multiply(this.inverseGrabStart).multiply(this.grabStartPlanet);
     this.planetRig.quaternion.copy(this.currentController);
     this.planetRig.position.copy(this.currentControllerPosition).sub(this.grabStartControllerPosition).add(this.grabStartPlanetPosition);
+    this.enforceMinimumDistance();
   }
 
   private captureDualGrab(left: Group, right: Group): void {
@@ -246,7 +279,7 @@ export class XrGlobeRenderer {
     this.dualStartVector.normalize();
     this.dualStartPlanetPosition.copy(this.planetRig.position);
     this.dualStartPlanet.copy(this.planetRig.quaternion);
-    this.dualStartViewDistance = Math.max(EARTH_RADIUS + 0.04, this.dualStartPlanetPosition.distanceTo(this.cameraPosition));
+    this.dualStartViewDistance = Math.max(EARTH_RADIUS + MIN_ALTITUDE, this.dualStartPlanetPosition.distanceTo(this.cameraPosition));
   }
 
   private updateDualGrab(left: Group, right: Group): void {
@@ -266,8 +299,9 @@ export class XrGlobeRenderer {
       .applyQuaternion(this.dualRotation);
     this.planetRig.position.copy(this.dualCurrentMidpoint).add(this.dualOffset);
     this.dualViewOffset.copy(this.planetRig.position).sub(this.cameraPosition);
-    const viewDistance = Math.min(36, Math.max(EARTH_RADIUS + 0.04, this.dualStartViewDistance / pinchRatio));
+    const viewDistance = Math.min(36, Math.max(EARTH_RADIUS + MIN_ALTITUDE, this.dualStartViewDistance / pinchRatio));
     this.planetRig.position.copy(this.cameraPosition).addScaledVector(this.dualViewOffset.normalize(), viewDistance);
+    this.enforceMinimumDistance();
   }
 
   private handFor(controller: Group): HandState | undefined {
@@ -276,17 +310,28 @@ export class XrGlobeRenderer {
 
   private flyAlongRay(controller: Group, delta: number, speed: number): void {
     controller.getWorldDirection(this.controllerDirection);
-    const altitude = Math.max(0.025, this.planetRig.position.distanceTo(this.cameraPosition) - EARTH_RADIUS);
+    const altitude = Math.max(MIN_ALTITUDE, this.planetRig.position.distanceTo(this.cameraPosition) - EARTH_RADIUS);
     const altitudeSpeed = Math.min(14, Math.max(0.06, altitude * 1.3));
     this.planetRig.position.addScaledVector(this.controllerDirection, -delta * speed * altitudeSpeed);
+    this.enforceMinimumDistance();
   }
 
   private moveRadially(input: number, delta: number): void {
     this.dualViewOffset.copy(this.planetRig.position).sub(this.cameraPosition);
     const distance = this.dualViewOffset.length();
-    const altitude = Math.max(0.025, distance - EARTH_RADIUS);
+    const altitude = Math.max(MIN_ALTITUDE, distance - EARTH_RADIUS);
     const speed = Math.min(14, Math.max(0.06, altitude * 1.3));
-    const nextDistance = Math.min(36, Math.max(EARTH_RADIUS + 0.04, distance + input * delta * speed));
+    const nextDistance = Math.min(36, Math.max(EARTH_RADIUS + MIN_ALTITUDE, distance + input * delta * speed));
     this.planetRig.position.copy(this.cameraPosition).addScaledVector(this.dualViewOffset.normalize(), nextDistance);
+  }
+
+  private enforceMinimumDistance(): void {
+    this.dualViewOffset.copy(this.planetRig.position).sub(this.cameraPosition);
+    const distance = this.dualViewOffset.length();
+    const minimum = EARTH_RADIUS + MIN_ALTITUDE;
+    if (distance < minimum) {
+      if (distance < 0.000001) this.dualViewOffset.set(0, 0, -1);
+      this.planetRig.position.copy(this.cameraPosition).addScaledVector(this.dualViewOffset.normalize(), minimum);
+    }
   }
 }

@@ -83,6 +83,8 @@ viewer.screenSpaceEventHandler.setInputAction((movement: { position: { x: number
 
 const xrGlobe = new XrGlobeRenderer(xrCanvas);
 const desktopStatus = 'Left drag orbits · right drag tilts · wheel flies · double-click travels';
+const previewParams = new URLSearchParams(window.location.search);
+const xrPreview = Number(previewParams.get('xrPreview'));
 
 function leaveXrUi(): void {
   document.body.classList.remove('xr-active');
@@ -102,7 +104,11 @@ function enterXrUi(): void {
   status!.textContent = 'VR: right grip grabs the globe · right trigger flies toward its ray · left trigger flies slowly · left stick pans · right stick turns/zooms.';
 }
 
-if (!navigator.xr) {
+if (Number.isFinite(xrPreview) && xrPreview > 0) {
+  viewer.useDefaultRenderLoop = false;
+  document.body.classList.add('xr-active');
+  xrGlobe.startPreview(xrPreview, Number(previewParams.get('lon') ?? 10.2), Number(previewParams.get('lat') ?? 56.1));
+} else if (!navigator.xr) {
   vrButton.disabled = true;
   vrButton.textContent = 'WebXR unavailable';
   status.textContent = 'Earth imagery ready. Use a WebXR-capable browser for headset view.';

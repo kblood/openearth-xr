@@ -25,10 +25,12 @@ view). The right trigger flies toward the pointed location and
 the left trigger provides a slow precision flight. **Exit VR** ends the
 session and restores the desktop viewer.
 
-The headset globe streams visible XYZ tiles in three nested levels: a coarse
-regional context, a city layer, and a local street layer. They remain layered
-as you zoom so detailed tiles do not collapse into an isolated patch or mirror
-their labels. The
+The headset uses a two-stage map surface: a global globe for orbital context,
+then a single tangent map panel that assembles a visible 5×5 XYZ tile mosaic
+as the viewer approaches the surface. This keeps country, city, and street
+maps continuous across the view instead of showing isolated tiles or mirrored
+labels. A hard minimum distance prevents navigation from entering the globe.
+The
 default is CARTO Voyager, a readable Latin-script road style derived from OSM;
 the tile provider is isolated behind a configuration seam for a future
 Danish-only style or self-hosted service.
