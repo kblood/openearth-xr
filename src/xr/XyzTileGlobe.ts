@@ -27,14 +27,26 @@ export const CARTO_VOYAGER: XyzTileProvider = {
 };
 
 const TILE_SIZE = 256;
-const TILE_GRID = 6;
+const BASE_TILE_GRID = 6;
 const CAP_SEGMENTS_PER_TILE = 8;
 const LOCAL_SURFACE_START = 1.6;
 const VIEW_OVERSCAN = 1.45;
 // Must remain below XrGlobeRenderer's minimum virtual altitude. Polygon offset
 // handles coplanar depth ordering without placing the viewer inside this shell.
-const SURFACE_OFFSET = 0.00001;
 const MAX_MERCATOR_LATITUDE = MathUtils.degToRad(85.05112878);
+
+type AtlasLayer = {
+  readonly gridSize: number;
+  readonly levelOffset: number;
+  readonly surfaceOffset: number;
+  readonly canvas: HTMLCanvasElement;
+  readonly texture: CanvasTexture;
+  readonly surface: Mesh;
+  requestedKey: string;
+  displayedKey: string;
+  revision: number;
+  abort: AbortController | null;
+};
 
 /**
  * Reproject a modest XYZ overview into the equirectangular UV layout used by
@@ -88,50 +100,36 @@ export async function createGlobalOverviewTexture(
 }
 
 /**
- * Loads an atomic XYZ atlas and maps every atlas grid vertex back to its exact
- * longitude/latitude on the globe. Geometry, UVs, tile selection and LOD thus
- * share one coordinate model. The previous tangent-panel implementation used
- * four independently approximated transforms, which caused mirrored labels,
- * unrelated locations and a visually frozen zoom transition.
+ * Loads atomic context, base, and central-detail XYZ atlases and maps every
+ * atlas grid vertex back to its exact longitude/latitude on the globe.
+ * Geometry, UVs, tile selection and LOD thus share one coordinate model. The
+ * previous tangent-panel implementation used four independently approximated
+ * transforms, which caused mirrored labels, unrelated locations and a visually
+ * frozen zoom transition.
  */
 export class XyzTileGlobe {
   readonly group = new Group();
-  private readonly canvas = document.createElement('canvas');
-  private readonly texture: CanvasTexture;
-  private readonly surface: Mesh;
   private readonly direction = new Vector3();
-  private requestedKey = '';
-  private displayedKey = '';
-  private revision = 0;
-  private atlasAbort: AbortController | null = null;
+  private readonly contextLayer: AtlasLayer;
+  private readonly baseLayer: AtlasLayer;
+  private readonly detailLayer: AtlasLayer;
+  private readonly layers: readonly AtlasLayer[];
 
   constructor(private readonly radius: number, readonly provider: XyzTileProvider = CARTO_VOYAGER) {
-    this.canvas.width = TILE_SIZE * TILE_GRID;
-    this.canvas.height = TILE_SIZE * TILE_GRID;
-    const context = this.canvas.getContext('2d');
-    if (!context) throw new Error('Canvas 2D is required for XR map tiles');
-    context.fillStyle = '#b7d2e0';
-    context.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    this.texture = new CanvasTexture(this.canvas);
-    this.texture.colorSpace = SRGBColorSpace;
-    this.surface = new Mesh(
-      new BufferGeometry(),
-      new MeshBasicMaterial({
-        map: this.texture,
-        polygonOffset: true,
-        polygonOffsetFactor: -4,
-        polygonOffsetUnits: -4,
-      }),
-    );
-    this.surface.visible = false;
-    this.group.add(this.surface);
+    // A broad low-LOD context remains around the normal view, the base layer
+    // covers the current FOV, and a central +1 LOD layer brings street labels
+    // in earlier without leaving the surrounding surface blank.
+    this.contextLayer = this.createLayer(BASE_TILE_GRID, -2, 0.000002, -2, 1);
+    this.baseLayer = this.createLayer(BASE_TILE_GRID, 0, 0.000004, -4, 2);
+    this.detailLayer = this.createLayer(4, 1, 0.000006, -6, 3);
+    this.layers = [this.contextLayer, this.baseLayer, this.detailLayer];
   }
 
   update(cameraInGlobeSpace: Vector3, verticalFovDegrees: number, aspect: number): void {
     const distance = cameraInGlobeSpace.length();
     const altitude = Math.max(0, distance - this.radius);
     if (altitude >= LOCAL_SURFACE_START || distance <= 0) {
-      this.surface.visible = false;
+      for (const layer of this.layers) layer.surface.visible = false;
       return;
     }
 
@@ -146,44 +144,103 @@ export class XyzTileGlobe {
     const angularWidth = Math.max(0.000001, 2 * Math.atan(halfWidth / this.radius));
     const mercatorStretch = 1 / Math.max(0.08, Math.cos(latitude));
     const baseTileDemand = Math.max(angularWidth, angularHeight * mercatorStretch) / (2 * Math.PI);
-    const usableTiles = TILE_GRID - 1.5;
+    const usableTiles = BASE_TILE_GRID - 1.5;
     const desiredZoom = Math.floor(Math.log2(usableTiles / baseTileDemand));
     const minimumLocalZoom = Math.max(this.provider.minZoom, 2);
     const level = MathUtils.clamp(desiredZoom, minimumLocalZoom, this.provider.maxZoom);
+    const contextLevel = Math.max(minimumLocalZoom, level + this.contextLayer.levelOffset);
+    const detailLevel = Math.min(this.provider.maxZoom, level + this.detailLayer.levelOffset);
+
+    this.updateLayer(this.baseLayer, level, longitude, latitude);
+    if (contextLevel < level) this.updateLayer(this.contextLayer, contextLevel, longitude, latitude);
+    else this.contextLayer.surface.visible = false;
+    if (detailLevel > level) this.updateLayer(this.detailLayer, detailLevel, longitude, latitude);
+    else this.detailLayer.surface.visible = false;
+  }
+
+  private createLayer(
+    gridSize: number,
+    levelOffset: number,
+    surfaceOffset: number,
+    polygonOffset: number,
+    renderOrder: number,
+  ): AtlasLayer {
+    const canvas = document.createElement('canvas');
+    canvas.width = TILE_SIZE * gridSize;
+    canvas.height = TILE_SIZE * gridSize;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas 2D is required for XR map tiles');
+    context.fillStyle = '#b7d2e0';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    const texture = new CanvasTexture(canvas);
+    texture.colorSpace = SRGBColorSpace;
+    const surface = new Mesh(
+      new BufferGeometry(),
+      new MeshBasicMaterial({
+        map: texture,
+        polygonOffset: true,
+        polygonOffsetFactor: polygonOffset,
+        polygonOffsetUnits: polygonOffset,
+      }),
+    );
+    surface.visible = false;
+    surface.renderOrder = renderOrder;
+    this.group.add(surface);
+    return {
+      gridSize,
+      levelOffset,
+      surfaceOffset,
+      canvas,
+      texture,
+      surface,
+      requestedKey: '',
+      displayedKey: '',
+      revision: 0,
+      abort: null,
+    };
+  }
+
+  private updateLayer(layer: AtlasLayer, level: number, longitude: number, latitude: number): void {
     const count = 2 ** level;
     const centerX = longitudeToTileX(longitude, count);
     const centerY = latitudeToTileY(latitude, count);
-    const baseX = Math.floor(centerX) - Math.floor(TILE_GRID / 2);
+    const baseX = Math.floor(centerX) - Math.floor(layer.gridSize / 2);
     const baseY = MathUtils.clamp(
-      Math.floor(centerY) - Math.floor(TILE_GRID / 2),
+      Math.floor(centerY) - Math.floor(layer.gridSize / 2),
       0,
-      Math.max(0, count - TILE_GRID),
+      Math.max(0, count - layer.gridSize),
     );
-    const key = `${level}/${baseX}/${baseY}`;
-    if (key !== this.requestedKey) {
-      this.requestedKey = key;
-      void this.loadAtlas(level, baseX, baseY, key);
+    const key = `${level}/${baseX}/${baseY}/${layer.gridSize}`;
+    if (key !== layer.requestedKey) {
+      layer.requestedKey = key;
+      void this.loadAtlas(layer, level, baseX, baseY, key);
     }
-    this.surface.visible = this.displayedKey.length > 0;
+    layer.surface.visible = layer.displayedKey.length > 0;
   }
 
-  private async loadAtlas(level: number, baseX: number, baseY: number, key: string): Promise<void> {
-    const revision = ++this.revision;
-    this.atlasAbort?.abort();
+  private async loadAtlas(
+    layer: AtlasLayer,
+    level: number,
+    baseX: number,
+    baseY: number,
+    key: string,
+  ): Promise<void> {
+    const revision = ++layer.revision;
+    layer.abort?.abort();
     const abort = new AbortController();
-    this.atlasAbort = abort;
+    layer.abort = abort;
     const count = 2 ** level;
     const staging = document.createElement('canvas');
-    staging.width = this.canvas.width;
-    staging.height = this.canvas.height;
+    staging.width = layer.canvas.width;
+    staging.height = layer.canvas.height;
     const context = staging.getContext('2d');
     if (!context) return;
     context.fillStyle = '#b7d2e0';
     context.fillRect(0, 0, staging.width, staging.height);
 
-    const tiles = await Promise.all(Array.from({ length: TILE_GRID * TILE_GRID }, async (_, index) => {
-      const column = index % TILE_GRID;
-      const row = Math.floor(index / TILE_GRID);
+    const tiles = await Promise.all(Array.from({ length: layer.gridSize * layer.gridSize }, async (_, index) => {
+      const column = index % layer.gridSize;
+      const row = Math.floor(index / layer.gridSize);
       const unwrappedX = baseX + column;
       const x = ((unwrappedX % count) + count) % count;
       const y = baseY + row;
@@ -193,7 +250,7 @@ export class XyzTileGlobe {
       return { column, row, image };
     }));
 
-    if (revision !== this.revision) {
+    if (revision !== layer.revision) {
       for (const tile of tiles) tile.image?.close();
       return;
     }
@@ -205,37 +262,49 @@ export class XyzTileGlobe {
       loaded += 1;
     }
     if (loaded === 0) {
-      this.requestedKey = '';
+      layer.requestedKey = '';
       return;
     }
 
-    const targetContext = this.canvas.getContext('2d');
+    const targetContext = layer.canvas.getContext('2d');
     if (!targetContext) return;
-    targetContext.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    targetContext.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
     targetContext.drawImage(staging, 0, 0);
-    this.texture.needsUpdate = true;
-    const previous = this.surface.geometry;
-    this.surface.geometry = this.createAtlasGeometry(level, baseX, baseY);
+    layer.texture.needsUpdate = true;
+    const previous = layer.surface.geometry;
+    layer.surface.geometry = this.createAtlasGeometry(
+      level,
+      baseX,
+      baseY,
+      layer.gridSize,
+      layer.surfaceOffset,
+    );
     previous.dispose();
-    this.displayedKey = key;
-    this.surface.visible = true;
+    layer.displayedKey = key;
+    layer.surface.visible = true;
   }
 
-  private createAtlasGeometry(level: number, baseX: number, baseY: number): BufferGeometry {
+  private createAtlasGeometry(
+    level: number,
+    baseX: number,
+    baseY: number,
+    gridSize: number,
+    surfaceOffset: number,
+  ): BufferGeometry {
     const count = 2 ** level;
-    const segments = TILE_GRID * CAP_SEGMENTS_PER_TILE;
+    const segments = gridSize * CAP_SEGMENTS_PER_TILE;
     const positions: number[] = [];
     const uvs: number[] = [];
     const indices: number[] = [];
-    const radius = this.radius + SURFACE_OFFSET;
+    const radius = this.radius + surfaceOffset;
     for (let row = 0; row <= segments; row += 1) {
       const v = row / segments;
-      const tileY = baseY + v * TILE_GRID;
+      const tileY = baseY + v * gridSize;
       const latitude = tileYToLatitude(tileY, count);
       const cosLatitude = Math.cos(latitude);
       for (let column = 0; column <= segments; column += 1) {
         const u = column / segments;
-        const tileX = baseX + u * TILE_GRID;
+        const tileX = baseX + u * gridSize;
         const longitude = tileX / count * 2 * Math.PI - Math.PI;
         positions.push(
           radius * cosLatitude * Math.cos(longitude),

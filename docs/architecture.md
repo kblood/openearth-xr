@@ -45,11 +45,14 @@ intentional: it gives the runtime control of both eye cameras and avoids a
 second desktop globe appearing in the headset. Controller input is attached
 through WebXR `connected` input sources; both standard Touch (axes 2/3) and
 trackpad (axes 0/1) layouts rotate/change globe distance. Trigger flight uses
-the WebXR target ray's local `-Z` direction. Single-controller grip applies controller translation and
-rotation to the globe; dual grip applies a midpoint-preserving transform where
-hand separation changes one shared virtual altitude and the hand-to-hand vector
-rotates it. Flight, pinch, and stick zoom all use this altitude; field of view
-never changes.
+the WebXR target ray's local `-Z` direction. Single-controller grip anchors the
+current terrain under the hand. Tangential translation rotates Earth by exactly
+the corresponding physical surface distance, while radial translation changes
+the shared virtual altitude. Controller orientation is deliberately ignored for
+one-hand drag, so a wrist turn does not make the user feel as if they are holding
+a miniature globe. Dual grip applies a midpoint-preserving transform where hand
+separation changes virtual altitude and the hand-to-hand vector rotates Earth.
+Flight, pinch, and stick zoom all use this altitude; field of view never changes.
 
 Navigation has two continuous regimes. Above a globe-local altitude of `0.32`,
 Earth remains at scale 1 and travel changes physical camera-to-centre distance.
@@ -58,8 +61,8 @@ at a constant comfortable physical clearance through the final available LOD.
 Globe-local altitude still decreases, so
 the tile selector advances from aircraft to city, street, and building LOD.
 Collision uses scaled radius plus physical clearance, rather than an unscaled
-fixed radius. A grabbed point rotates about the controller pivot, which keeps
-nearby terrain anchored after the scale transition.
+fixed radius. Grab translation is converted through the current physical Earth
+radius, keeping the terrain-to-hand gain constant after the scale transition.
 
 Thumbstick axes are remapped quadratically outside the dead zone. Angular turn
 gain is divided by the effective Earth scale, which bounds near-surface ground
@@ -67,16 +70,20 @@ speed, while zoom rate interpolates logarithmically from orbital to minimum
 altitude. Two-hand pinch uses the same proximity value to reduce its exponent
 near the surface.
 
-The map surface is a two-stage renderer. An orbital parent globe receives a
+The map surface is a multi-LOD renderer. An orbital parent globe receives a
 Web-Mercator XYZ overview reprojected to equirectangular UVs; this avoids
 incorrectly stretching a single Mercator tile across a sphere. Near the
-surface, an atomic 6×6 atlas is loaded at a zoom chosen from globe-local virtual
-altitude, camera FOV, aspect ratio, and Mercator latitude stretch. Every atlas
-vertex is
+surface, three independently atomic atlases are loaded around the viewer's
+nadir: a broad 6×6 context layer at `base - 2`, a 6×6 base layer chosen from
+globe-local virtual altitude, camera FOV, aspect ratio, and Mercator latitude
+stretch, and a central 4×4 detail layer at `base + 1`. The context layer keeps
+surrounding terrain available when the user looks away from the centre, while
+the detail layer preserves street-label continuity across base LOD changes.
+Every atlas vertex is
 converted from its exact XYZ coordinate to longitude/latitude and placed on the
 same sphere. Both renderers use SphereGeometry's convention that eastward
 longitude points toward local `-Z`, and the curved atlas renders front faces
-only. Obsolete atlas fetches are aborted while the last complete atlas stays
+only. Fetches are cancelled per layer while each last complete atlas stays
 visible. This avoids blank zoom frames, gaps, flat-map transitions, mirrored
 labels, and unrelated-tile jumps, while a minimum radial distance prevents the
 viewer entering the globe.

@@ -51,15 +51,15 @@ export class XrGlobeRenderer {
   private readonly flightTangent = new Vector3();
   private readonly worldUp = new Vector3(0, 1, 0);
   private readonly worldForward = new Vector3(0, 0, 1);
-  private readonly grabStartController = new Quaternion();
-  private readonly currentController = new Quaternion();
   private readonly rayQuaternion = new Quaternion();
   private readonly grabStartPlanet = new Quaternion();
-  private readonly inverseGrabStart = new Quaternion();
   private readonly grabStartControllerPosition = new Vector3();
-  private readonly grabStartPlanetPosition = new Vector3();
-  private readonly grabOffset = new Vector3();
   private readonly currentControllerPosition = new Vector3();
+  private readonly grabStartOutward = new Vector3();
+  private readonly grabTranslation = new Vector3();
+  private readonly grabTangent = new Vector3();
+  private readonly grabAxis = new Vector3();
+  private readonly grabRotation = new Quaternion();
   private readonly dualStartLeft = new Vector3();
   private readonly dualStartRight = new Vector3();
   private readonly dualStartMidpoint = new Vector3();
@@ -76,6 +76,7 @@ export class XrGlobeRenderer {
   private readonly dualStartPlanet = new Quaternion();
   private dualStartDistance = 1;
   private dualStartAltitude = 1;
+  private grabStartAltitude = 1;
   private session: XRSession | null = null;
   private onEnd: (() => void) | null = null;
 
@@ -290,24 +291,32 @@ export class XrGlobeRenderer {
 
   private captureSingleGrab(controller: Group): void {
     controller.getWorldPosition(this.grabStartControllerPosition);
-    controller.getWorldQuaternion(this.grabStartController);
-    this.grabStartPlanetPosition.copy(this.planetRig.position);
     this.grabStartPlanet.copy(this.planetRig.quaternion);
+    this.grabStartAltitude = this.getVirtualAltitude();
+    this.grabStartOutward.copy(this.cameraPosition).sub(this.planetRig.position);
+    if (this.grabStartOutward.lengthSq() < 0.000001) this.grabStartOutward.set(0, 0, 1);
+    this.grabStartOutward.normalize();
   }
 
   private updateSingleGrab(controller: Group): void {
     controller.getWorldPosition(this.currentControllerPosition);
-    controller.getWorldQuaternion(this.currentController);
-    this.inverseGrabStart.copy(this.grabStartController).invert();
-    this.currentController.multiply(this.inverseGrabStart);
-    this.planetRig.quaternion.copy(this.currentController).multiply(this.grabStartPlanet);
-    // Rotate the planet-to-hand offset with the controller delta. This keeps
-    // the grabbed surface point anchored even after Earth has scaled into the
-    // near-surface flight regime.
-    this.grabOffset.copy(this.grabStartPlanetPosition).sub(this.grabStartControllerPosition)
-      .applyQuaternion(this.currentController);
-    this.planetRig.position.copy(this.currentControllerPosition).add(this.grabOffset);
-    this.enforceMinimumDistance();
+    this.grabTranslation.copy(this.currentControllerPosition).sub(this.grabStartControllerPosition);
+    const radialDrag = this.grabTranslation.dot(this.grabStartOutward);
+    this.grabTangent.copy(this.grabTranslation)
+      .addScaledVector(this.grabStartOutward, -radialDrag);
+    const tangentDistance = this.grabTangent.length();
+    if (tangentDistance > 0.000001) {
+      this.grabAxis.crossVectors(this.grabStartOutward, this.grabTangent).normalize();
+      const physicalRadius = EARTH_RADIUS * Math.max(1, this.planetRig.scale.x);
+      this.grabRotation.setFromAxisAngle(this.grabAxis, tangentDistance / physicalRadius);
+      this.planetRig.quaternion.copy(this.grabRotation).multiply(this.grabStartPlanet);
+    } else {
+      this.planetRig.quaternion.copy(this.grabStartPlanet);
+    }
+    // Pulling the grabbed terrain toward the viewer descends; pushing it away
+    // climbs. Tangential hand motion drags the surface beneath a stationary
+    // viewer instead of carrying a small globe in the controller.
+    this.setVirtualAltitude(this.grabStartAltitude * Math.exp(-radialDrag * 1.8));
   }
 
   private captureDualGrab(left: Group, right: Group): void {
@@ -332,9 +341,9 @@ export class XrGlobeRenderer {
     this.dualCurrentVector.normalize();
     this.dualRotation.setFromUnitVectors(this.dualStartVector, this.dualCurrentVector);
     this.planetRig.quaternion.copy(this.dualRotation).multiply(this.dualStartPlanet);
-    // Keep the globe carried by the midpoint, then apply pinch as *distance*
-    // to the globe—not camera FoV or world scale. This keeps every control on
-    // the same physical zoom model and gives tile LOD a stable altitude.
+    // Keep the two-hand transform anchored at the midpoint, then apply pinch
+    // to the shared virtual altitude—not camera FoV. This keeps every control
+    // on the same zoom model and gives tile LOD a stable altitude.
     this.dualOffset.copy(this.dualStartPlanetPosition).sub(this.dualStartMidpoint)
       .applyQuaternion(this.dualRotation);
     this.planetRig.position.copy(this.dualCurrentMidpoint).add(this.dualOffset);
