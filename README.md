@@ -22,11 +22,15 @@ controller to pick up, carry, and turn the globe. Grip both controllers to
 move it with both hands, twist it, or pinch/stretch the distance between your
 hands to descend or climb (the headset field of view never changes). At orbital
 altitude this changes camera-to-globe distance. Below the flight threshold,
-Earth scales up while the surface stays comfortably in front of the viewer,
+Earth scales dynamically up to 4000× while the surface stays comfortably in front of the viewer,
 allowing continuous travel through aircraft, city, street, and building scale.
 The right trigger flies toward the pointed location and
 the left trigger provides a slow precision flight. **Exit VR** ends the
 session and restores the desktop viewer.
+
+Stick input has a precision curve around its dead zone. Turn/pan speed is
+reduced as Earth scales up, and zoom speed falls continuously from orbital to
+street altitude; full deflection remains available for deliberate fast travel.
 
 The headset uses a two-stage map surface: a global Web-Mercator overview is
 reprojected onto the globe, then an atomic 6×6 XYZ atlas is mapped to exact

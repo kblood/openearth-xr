@@ -53,12 +53,19 @@ never changes.
 
 Navigation has two continuous regimes. Above a globe-local altitude of `0.32`,
 Earth remains at scale 1 and travel changes physical camera-to-centre distance.
-Below that threshold, Earth scales smoothly up to 512× while its surface stays
-at a comfortable physical clearance. Globe-local altitude still decreases, so
+Below that threshold, Earth scales smoothly up to 4000× while its surface stays
+at a constant comfortable physical clearance through the final available LOD.
+Globe-local altitude still decreases, so
 the tile selector advances from aircraft to city, street, and building LOD.
 Collision uses scaled radius plus physical clearance, rather than an unscaled
 fixed radius. A grabbed point rotates about the controller pivot, which keeps
 nearby terrain anchored after the scale transition.
+
+Thumbstick axes are remapped quadratically outside the dead zone. Angular turn
+gain is divided by the effective Earth scale, which bounds near-surface ground
+speed, while zoom rate interpolates logarithmically from orbital to minimum
+altitude. Two-hand pinch uses the same proximity value to reduce its exponent
+near the surface.
 
 The map surface is a two-stage renderer. An orbital parent globe receives a
 Web-Mercator XYZ overview reprojected to equirectangular UVs; this avoids

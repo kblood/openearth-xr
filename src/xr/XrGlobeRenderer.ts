@@ -22,9 +22,12 @@ const EARTH_RADIUS = 1.45;
 const FLIGHT_SCALE_ALTITUDE = 0.32;
 const MIN_VIRTUAL_ALTITUDE = 0.00008;
 const MAX_VIRTUAL_ALTITUDE = 24;
-const MAX_PLANET_SCALE = 512;
+const MAX_PLANET_SCALE = FLIGHT_SCALE_ALTITUDE / MIN_VIRTUAL_ALTITUDE;
 const MIN_PHYSICAL_CLEARANCE = 0.04;
-const ZOOM_RATE = 1.8;
+const ORBIT_ZOOM_RATE = 0.95;
+const SURFACE_ZOOM_RATE = 0.28;
+const ORBIT_PINCH_EXPONENT = 2;
+const SURFACE_PINCH_EXPONENT = 0.75;
 
 type Hand = 'left' | 'right';
 type HandState = { source: XRInputSource; controller: Group; trigger: boolean; squeeze: boolean };
@@ -209,17 +212,22 @@ export class XrGlobeRenderer {
     const left = this.hands.get('left');
     const right = this.hands.get('right');
     if (left) {
-      const [x, y] = this.activeAxes(left.source);
+      const [rawX, rawY] = this.activeAxes(left.source);
+      const x = this.shapeAxis(rawX);
+      const y = this.shapeAxis(rawY);
+      const turnScale = this.stickTurnScale();
       // Left stick pans the world below the viewer instead of duplicating
       // rotation. It is deliberately separate from the right-hand heading.
-      if (Math.abs(x) > DEAD_ZONE) this.planetRig.rotateOnWorldAxis(this.worldUp, -x * delta * 0.9);
-      if (Math.abs(y) > DEAD_ZONE) this.planetRig.rotateX(-y * delta * 0.72);
+      if (x !== 0) this.planetRig.rotateOnWorldAxis(this.worldUp, -x * delta * 0.65 * turnScale);
+      if (y !== 0) this.planetRig.rotateX(-y * delta * 0.55 * turnScale);
     }
     const grabbing = left?.squeeze || right?.squeeze;
     if (right && !grabbing) {
-      const [x, y] = this.activeAxes(right.source);
-      if (Math.abs(x) > DEAD_ZONE) this.planetRig.rotateOnWorldAxis(this.worldUp, -x * delta * 1.35);
-      if (Math.abs(y) > DEAD_ZONE) this.moveRadially(y, delta);
+      const [rawX, rawY] = this.activeAxes(right.source);
+      const x = this.shapeAxis(rawX);
+      const y = this.shapeAxis(rawY);
+      if (x !== 0) this.planetRig.rotateOnWorldAxis(this.worldUp, -x * delta * 0.85 * this.stickTurnScale());
+      if (y !== 0) this.moveRadially(y, delta);
     }
     if (left?.squeeze && right?.squeeze) this.updateDualGrab(left.controller, right.controller);
     else if (right?.squeeze) this.updateSingleGrab(right.controller);
@@ -242,6 +250,20 @@ export class XrGlobeRenderer {
     // Some runtimes retain a zeroed 2/3 pair. Choose the pair the user is
     // actually moving rather than relying on a nullish fallback.
     return Math.hypot(...first) > Math.hypot(...second) ? first : second;
+  }
+
+  private shapeAxis(value: number): number {
+    const magnitude = Math.abs(value);
+    if (magnitude <= DEAD_ZONE) return 0;
+    const normalised = (magnitude - DEAD_ZONE) / (1 - DEAD_ZONE);
+    return Math.sign(value) * normalised * normalised;
+  }
+
+  private stickTurnScale(): number {
+    // A fixed angular rate turns into extreme ground speed after Earth scales
+    // up. This keeps near-surface movement bounded in physical metres/second.
+    const scale = Math.max(1, this.planetRig.scale.x);
+    return 1 / (1 + (scale - 1) * 4);
   }
 
   private setTrigger(controller: Group, active: boolean): void {
@@ -316,7 +338,12 @@ export class XrGlobeRenderer {
     this.dualOffset.copy(this.dualStartPlanetPosition).sub(this.dualStartMidpoint)
       .applyQuaternion(this.dualRotation);
     this.planetRig.position.copy(this.dualCurrentMidpoint).add(this.dualOffset);
-    this.setVirtualAltitude(this.dualStartAltitude / (pinchRatio * pinchRatio));
+    const pinchExponent = MathUtils.lerp(
+      ORBIT_PINCH_EXPONENT,
+      SURFACE_PINCH_EXPONENT,
+      this.nearSurfaceProgress(this.dualStartAltitude),
+    );
+    this.setVirtualAltitude(this.dualStartAltitude / Math.pow(pinchRatio, pinchExponent));
   }
 
   private handFor(controller: Group): HandState | undefined {
@@ -344,7 +371,9 @@ export class XrGlobeRenderer {
     this.planetRig.position.addScaledVector(this.flightTangent, -delta * speed * lateralSpeed);
     if (Math.abs(radialAlignment) > 0.08) {
       const altitude = this.getVirtualAltitude();
-      this.setVirtualAltitude(altitude * Math.exp(-radialAlignment * delta * speed * ZOOM_RATE));
+      this.setVirtualAltitude(
+        altitude * Math.exp(-radialAlignment * delta * speed * this.zoomRateForAltitude(altitude)),
+      );
     } else {
       this.enforceMinimumDistance();
     }
@@ -352,7 +381,25 @@ export class XrGlobeRenderer {
 
   private moveRadially(input: number, delta: number): void {
     const altitude = this.getVirtualAltitude();
-    this.setVirtualAltitude(altitude * Math.exp(input * delta * ZOOM_RATE));
+    this.setVirtualAltitude(altitude * Math.exp(input * delta * this.zoomRateForAltitude(altitude)));
+  }
+
+  private zoomRateForAltitude(altitude: number): number {
+    return MathUtils.lerp(
+      ORBIT_ZOOM_RATE,
+      SURFACE_ZOOM_RATE,
+      this.nearSurfaceProgress(altitude),
+    );
+  }
+
+  private nearSurfaceProgress(altitude: number): number {
+    if (altitude >= FLIGHT_SCALE_ALTITUDE) return 0;
+    return MathUtils.clamp(
+      Math.log(FLIGHT_SCALE_ALTITUDE / Math.max(MIN_VIRTUAL_ALTITUDE, altitude))
+        / Math.log(FLIGHT_SCALE_ALTITUDE / MIN_VIRTUAL_ALTITUDE),
+      0,
+      1,
+    );
   }
 
   private enforceMinimumDistance(): void {
