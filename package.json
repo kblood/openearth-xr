@@ -1,11 +1,28 @@
 {
   "name": "openearth-xr",
-  "private": true,
-  "version": "0.2.10",
+  "private": false,
+  "version": "0.3.0",
   "type": "module",
+  "main": "./dist-lib/openearth.js",
+  "module": "./dist-lib/openearth.js",
+  "types": "./dist-lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist-lib/types/index.d.ts",
+      "import": "./dist-lib/openearth.js"
+    }
+  },
+  "files": [
+    "dist-lib",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run build:app && npm run build:lib",
+    "build:app": "tsc --noEmit && vite build",
+    "build:lib": "tsc -p tsconfig.lib.json && vite build -c vite.lib.config.ts",
+    "prepare": "npm run build:lib",
     "preview": "vite preview",
     "release": "powershell -ExecutionPolicy Bypass -File scripts/release.ps1"
   },

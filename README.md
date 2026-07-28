@@ -52,6 +52,19 @@ default is CARTO Voyager, a readable Latin-script road style derived from OSM;
 the tile provider is isolated behind a configuration seam for a future
 Danish-only style or self-hosted service.
 
+## Embed in another application
+
+The package exports `OpenEarthViewer`, a UI-independent controller for the
+desktop globe and immersive renderer. Hosts can provide their own container,
+XR canvas, Cesium imagery provider, immersive XYZ tile provider, initial view,
+and camera limits; navigation and XR state are available through methods and an
+`xrchange` event. Cesium and Three.js stay external in the ESM library build so
+an integrating app owns exactly one copy of each engine.
+
+Run `npm run build:lib` to create the ESM bundle and TypeScript declarations.
+See [integration.md](docs/integration.md) for a complete vanilla example,
+framework lifecycle guidance, asset setup, and all configuration seams.
+
 ## Release
 
 ```powershell

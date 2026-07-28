@@ -12,7 +12,13 @@ import {
 
 export interface XyzTileProvider {
   readonly id: string;
-  readonly url: (z: number, x: number, y: number) => string;
+  /** Network-backed providers can expose a URL for each XYZ tile. */
+  readonly url?: (z: number, x: number, y: number) => string;
+  /**
+   * App-owned providers can return decoded images from OPFS, IndexedDB,
+   * native bridges, or another map SDK without creating an HTTP endpoint.
+   */
+  readonly loadTile?: (z: number, x: number, y: number, signal?: AbortSignal) => Promise<ImageBitmap | null>;
   readonly attribution: string;
   readonly minZoom: number;
   readonly maxZoom: number;
@@ -70,7 +76,7 @@ export async function createGlobalOverviewTexture(
   const tiles = await Promise.all(Array.from({ length: count * count }, async (_, index) => {
     const x = index % count;
     const y = Math.floor(index / count);
-    const image = await fetchTile(provider.url(level, x, y));
+    const image = await loadProviderTile(provider, level, x, y);
     return { x, y, image };
   }));
   for (const { x, y, image } of tiles) {
@@ -245,7 +251,7 @@ export class XyzTileGlobe {
       const x = ((unwrappedX % count) + count) % count;
       const y = baseY + row;
       const image = y >= 0 && y < count
-        ? await fetchTile(this.provider.url(level, x, y), abort.signal)
+        ? await loadProviderTile(this.provider, level, x, y, abort.signal)
         : null;
       return { column, row, image };
     }));
@@ -344,6 +350,18 @@ async function fetchTile(url: string, signal?: AbortSignal): Promise<ImageBitmap
   } catch {
     return null;
   }
+}
+
+async function loadProviderTile(
+  provider: XyzTileProvider,
+  z: number,
+  x: number,
+  y: number,
+  signal?: AbortSignal,
+): Promise<ImageBitmap | null> {
+  if (provider.loadTile) return provider.loadTile(z, x, y, signal);
+  if (provider.url) return fetchTile(provider.url(z, x, y), signal);
+  throw new Error(`XYZ tile provider '${provider.id}' must define url or loadTile`);
 }
 
 function longitudeToTileX(longitude: number, count: number): number {

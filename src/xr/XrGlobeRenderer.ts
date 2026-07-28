@@ -14,7 +14,12 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
-import { CARTO_VOYAGER, createGlobalOverviewTexture, XyzTileGlobe } from './XyzTileGlobe';
+import {
+  CARTO_VOYAGER,
+  createGlobalOverviewTexture,
+  XyzTileGlobe,
+  type XyzTileProvider,
+} from './XyzTileGlobe';
 
 const STARTING_YAW = -0.8;
 const DEAD_ZONE = 0.12;
@@ -44,7 +49,7 @@ export class XrGlobeRenderer {
   private readonly planetRig = new Group();
   private readonly clock = new Clock();
   private readonly hands = new Map<Hand, HandState>();
-  private readonly tiles = new XyzTileGlobe(EARTH_RADIUS, CARTO_VOYAGER);
+  private readonly tiles: XyzTileGlobe;
   private readonly cameraPosition = new Vector3();
   private readonly cameraInGlobeSpace = new Vector3();
   private readonly controllerDirection = new Vector3();
@@ -80,12 +85,16 @@ export class XrGlobeRenderer {
   private session: XRSession | null = null;
   private onEnd: (() => void) | null = null;
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  constructor(
+    private readonly canvas: HTMLCanvasElement,
+    tileProvider: XyzTileProvider = CARTO_VOYAGER,
+  ) {
     this.renderer = new WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.xr.enabled = true;
     this.renderer.xr.setReferenceSpaceType('local-floor');
     this.renderer.xr.setFoveation(0.6);
+    this.tiles = new XyzTileGlobe(EARTH_RADIUS, tileProvider);
 
     this.scene.background = new Color(0x030812);
     this.camera.position.set(0, 1.6, 0);
@@ -105,7 +114,7 @@ export class XrGlobeRenderer {
     // Never place a Web-Mercator XYZ tile directly on a sphere: its UVs are
     // equirectangular and would make the globe disagree with the close tiles.
     // This overview is reprojected from the same provider used by the surface.
-    void createGlobalOverviewTexture(CARTO_VOYAGER)
+    void createGlobalOverviewTexture(tileProvider)
       .then((texture) => { material.map = texture; material.needsUpdate = true; })
       .catch(() => undefined);
 
@@ -178,6 +187,19 @@ export class XrGlobeRenderer {
   }
 
   async exit(): Promise<void> { await this.session?.end(); }
+
+  stopPreview(): void {
+    if (this.session) return;
+    this.renderer.setAnimationLoop(null);
+    this.canvas.hidden = true;
+  }
+
+  async dispose(): Promise<void> {
+    if (this.session) await this.session.end();
+    this.renderer.setAnimationLoop(null);
+    this.renderer.dispose();
+    this.canvas.hidden = true;
+  }
 
   private readonly handleSessionEnd = (): void => {
     this.renderer.setAnimationLoop(null);
