@@ -1,7 +1,7 @@
 {
   "name": "openearth-xr",
   "private": false,
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Embeddable open-source Earth viewer with Cesium desktop rendering, Three.js WebXR, open map tiles, and 3D buildings.",
   "type": "module",
   "license": "MIT",

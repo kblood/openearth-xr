@@ -1,11 +1,32 @@
+import { readFile } from "node:fs/promises";
 import { chromium } from "@playwright/test";
 import { preview } from "vite";
 
 const host = "127.0.0.1";
 const port = 4173;
-const server = await preview({
-  preview: { host, port, strictPort: true },
-});
+const htaccess = await readFile(
+  new URL("../deploy/.htaccess", import.meta.url),
+  "utf8",
+);
+const cspMatch = htaccess.match(
+  /Header always set Content-Security-Policy "([^"\r\n]+)"/,
+);
+if (!cspMatch) throw new Error("Could not read the deployment CSP");
+
+const configuredBaseUrl = process.env.OPENEARTH_SMOKE_BASE_URL?.trim();
+const baseUrl = configuredBaseUrl
+  ? new URL(configuredBaseUrl).href.replace(/\/+$/, "")
+  : `http://${host}:${port}`;
+const server = configuredBaseUrl
+  ? undefined
+  : await preview({
+      preview: {
+        host,
+        port,
+        strictPort: true,
+        headers: { "Content-Security-Policy": cspMatch[1] },
+      },
+    });
 let browser;
 
 try {
@@ -28,7 +49,7 @@ try {
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
-  await page.goto(`http://${host}:${port}/?view=copenhagen`, {
+  await page.goto(`${baseUrl}/?view=copenhagen`, {
     waitUntil: "domcontentloaded",
   });
   await page
@@ -55,10 +76,9 @@ try {
   xrPage.on("pageerror", (error) =>
     xrPageErrors.push(error.stack ?? error.message),
   );
-  await xrPage.goto(
-    `http://${host}:${port}/?xrPreview=4.5&lon=12.5683&lat=55.6761`,
-    { waitUntil: "domcontentloaded" },
-  );
+  await xrPage.goto(`${baseUrl}/?xrPreview=4.5&lon=12.5683&lat=55.6761`, {
+    waitUntil: "domcontentloaded",
+  });
   const xrCanvas = xrPage.locator("#xr-globe");
   await xrCanvas.waitFor({ state: "visible", timeout: 30_000 });
   await xrPage.locator("body.xr-active").waitFor({ timeout: 30_000 });
@@ -102,5 +122,7 @@ try {
   console.log("Chromium desktop and XR-preview smoke tests passed.");
 } finally {
   await browser?.close();
-  await new Promise((resolve) => server.httpServer.close(resolve));
+  if (server) {
+    await new Promise((resolve) => server.httpServer.close(resolve));
+  }
 }

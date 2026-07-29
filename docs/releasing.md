@@ -68,9 +68,10 @@ targets.
 The script always runs release verification, creates a release identity, uploads
 to a unique staging directory, validates required files and every SHA-256 sum,
 then uses a locked symlink swap to activate an immutable release. It requests
-`release.json` over HTTPS and automatically restores the previous target if the
-health check fails. Four releases are retained by default; use `-Retain` to keep
-between two and twenty.
+`release.json` over HTTPS, validates response policies and cache behavior, and
+runs desktop plus XR-preview Chromium smoke tests against the live origin. It
+automatically restores the previous target if any health check fails. Four
+releases are retained by default; use `-Retain` to keep between two and twenty.
 
 After deployment, manually verify:
 

@@ -5,6 +5,18 @@ Notable changes to OpenEarth XR are documented here. The project follows
 
 ## Unreleased
 
+## 0.5.2 - 2026-07-29
+
+### Changed
+
+- Browser smoke tests now apply the deployed CSP locally and can target the live
+  origin; deployments run that production probe before accepting activation.
+
+### Fixed
+
+- Allowed Cesium Viewer binding evaluation and WebAssembly compilation in the
+  otherwise same-origin-only script policy so the production globe can start.
+
 ## 0.5.1 - 2026-07-29
 
 ### Changed

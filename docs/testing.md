@@ -19,8 +19,11 @@ browser, waits for Cesium's visible canvas, exercises place/reset controls, and
 fails on uncaught page errors. It also opens a deterministic orbital XR preview
 and verifies that the WebGL canvas produces non-uniform pixels. This catches
 immersive-renderer startup failures without claiming to emulate a headset or
-requiring a public tile request to succeed. CI runs it independently of unit
-tests.
+requiring a public tile request to succeed. The local preview applies the exact
+CSP extracted from `deploy/.htaccess`. Set `OPENEARTH_SMOKE_BASE_URL` to an
+already-built HTTPS deployment to test that origin instead. CI runs the local
+probe independently of unit tests, and the deployment gate runs it against the
+newly activated release before accepting the symlink swap.
 
 ## Automated coverage and remaining hardware work
 

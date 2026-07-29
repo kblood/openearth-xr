@@ -30,3 +30,10 @@ The deployment defaults and verification steps are documented in
 [the release runbook](docs/releasing.md). Dependency audit results are useful
 signals, not a substitute for review of WebGL/WebXR, parsers, deployment, and
 provider behavior.
+
+The public site's `script-src` is restricted to same-origin scripts but includes
+`'unsafe-eval'`. Cesium's bundled Viewer/Knockout runtime evaluates generated
+bindings, and its WebAssembly decoders require runtime compilation. The release
+browser probe exercises the exact policy. Removing this exception requires a
+future widgetless Cesium integration or an upstream runtime that does not use
+string evaluation; keep external script origins and `'unsafe-inline'` excluded.

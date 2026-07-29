@@ -127,7 +127,7 @@ printf '%s\n' "`$previous"
       }
     }
     $contentSecurityPolicy = [string]$indexResponse.Headers['Content-Security-Policy']
-    foreach ($requiredDirective in @("default-src 'self'", "frame-ancestors 'self' https://*.dionysus.dk", "worker-src 'self' blob:")) {
+    foreach ($requiredDirective in @("default-src 'self'", "frame-ancestors 'self' https://*.dionysus.dk", "script-src 'self' 'unsafe-eval'", "worker-src 'self' blob:")) {
       if (-not $contentSecurityPolicy.Contains($requiredDirective)) {
         throw "Content-Security-Policy is missing $requiredDirective."
       }
@@ -144,6 +144,18 @@ printf '%s\n' "`$previous"
     $assetResponse = Invoke-WebRequest -UseBasicParsing -Method Head -Uri $assetUri -TimeoutSec 30
     if ($assetResponse.Headers['Cache-Control'] -notmatch 'immutable') {
       throw "Hashed asset Cache-Control is unsafe: $($assetResponse.Headers['Cache-Control'])"
+    }
+    $previousSmokeBaseUrl = $env:OPENEARTH_SMOKE_BASE_URL
+    try {
+      $env:OPENEARTH_SMOKE_BASE_URL = $LiveUrl.TrimEnd('/')
+      & npm.cmd run smoke:browser
+      Assert-NativeSuccess 'The live desktop/XR-preview browser smoke test failed.'
+    } finally {
+      if ($null -eq $previousSmokeBaseUrl) {
+        Remove-Item Env:OPENEARTH_SMOKE_BASE_URL -ErrorAction SilentlyContinue
+      } else {
+        $env:OPENEARTH_SMOKE_BASE_URL = $previousSmokeBaseUrl
+      }
     }
   } catch {
     if ($previousTarget -and $previousTarget.StartsWith("$remoteReleases/release-")) {
