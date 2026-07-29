@@ -2,29 +2,85 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#07111f" />
-    <title>OpenEarth XR</title>
+    <meta name="description" content="OpenEarth is an open-source planet viewer from orbit to streets, on desktop and WebXR." />
+    <meta property="og:title" content="OpenEarth" />
+    <meta property="og:description" content="Explore an open Earth from orbit to streets, on desktop and in VR." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./openearth-icon.svg" type="image/svg+xml" />
+    <title>OpenEarth</title>
   </head>
   <body>
     <main>
-      <div id="globe" aria-label="Interactive 3D globe"></div>
-      <canvas id="xr-globe" aria-label="Immersive WebXR globe" hidden></canvas>
-      <section class="hud" aria-live="polite">
-        <p class="eyebrow">OPEN SOURCE · WEBXR FIRST</p>
-        <h1>OpenEarth</h1>
-        <p class="lede">An open planet viewer—from orbit to streets, desktop to headset.</p>
-        <div class="actions">
-          <button id="enter-vr" type="button">VR view</button>
-          <button id="reset-view" class="secondary" type="button">Reset view</button>
+      <div id="globe" role="application" tabindex="0" aria-label="Interactive 3D Earth" aria-describedby="controls-help"></div>
+      <canvas id="xr-globe" aria-label="Immersive WebXR Earth" hidden></canvas>
+
+      <header class="hud" aria-label="OpenEarth controls">
+        <div class="brand-row">
+          <div>
+            <p class="eyebrow">OPEN SOURCE · EARTH · WEBXR</p>
+            <h1>OpenEarth</h1>
+          </div>
+          <button id="toggle-ui" class="icon-button" type="button" aria-label="Hide controls" title="Hide controls">×</button>
         </div>
-        <div class="places" aria-label="Places">
+
+        <form id="search-form" class="search" role="search">
+          <label class="sr-only" for="search-input">Search place or coordinates</label>
+          <input id="search-input" type="search" autocomplete="off" placeholder="Search places or 55.67, 12.56" aria-controls="search-results" aria-expanded="false" />
+          <button type="submit">Go</button>
+        </form>
+        <ol id="search-results" class="search-results" aria-label="Search results" hidden></ol>
+
+        <div class="actions" aria-label="Primary actions">
+          <button id="enter-vr" type="button">Enter VR</button>
+          <button id="reset-view" class="secondary" type="button">Reset</button>
+          <button id="share-view" class="secondary" type="button">Share</button>
+          <button id="locate-me" class="secondary" type="button">My location</button>
+        </div>
+
+        <div class="places" aria-label="Quick destinations">
           <button data-place="earth" type="button">Earth</button>
           <button data-place="denmark" type="button">Denmark</button>
           <button data-place="copenhagen" type="button">Copenhagen</button>
         </div>
-        <p id="status">Left drag orbits · right drag tilts · wheel flies · double-click travels</p>
+
+        <div class="tool-strip" aria-label="Tools">
+          <button id="measure" class="tool" type="button" aria-pressed="false">Measure</button>
+          <button id="bookmark" class="tool" type="button">Bookmark</button>
+          <button id="bookmarks" class="tool" type="button">Saved</button>
+          <button id="tour" class="tool" type="button" aria-pressed="false">Denmark tour</button>
+          <button id="layers" class="tool" type="button">Layers</button>
+          <button id="data-info" class="tool" type="button">Data</button>
+          <button id="install-app" class="tool" type="button" hidden>Install</button>
+        </div>
+
+        <p id="controls-help" class="controls-help">Drag to orbit · right drag to tilt · wheel to fly · double-click to travel</p>
+        <p id="status" role="status" aria-live="polite">Loading Earth…</p>
+      </header>
+
+      <button id="show-ui" class="show-ui" type="button" hidden>OpenEarth controls</button>
+      <button id="exit-vr" class="xr-mirror-exit" type="button" hidden>Exit VR</button>
+
+      <aside id="tool-panel" class="tool-panel" role="dialog" aria-modal="false" aria-labelledby="tool-panel-title" hidden>
+        <div class="panel-heading">
+          <h2 id="tool-panel-title">OpenEarth</h2>
+          <button id="close-panel" class="icon-button" type="button" aria-label="Close panel">×</button>
+        </div>
+        <div id="panel-content"></div>
+      </aside>
+
+      <section id="tour-card" class="tour-card" aria-live="polite" hidden>
+        <p class="eyebrow">GUIDED TOUR</p>
+        <h2 id="tour-title"></h2>
+        <p id="tour-description"></p>
+        <button id="stop-tour" class="secondary" type="button">Stop tour</button>
       </section>
+
+      <footer class="attribution" aria-label="Map attribution">
+        <span>Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a></span>
+        <span id="source-attribution">Buildings © OpenFreeMap · OpenMapTiles</span>
+      </footer>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

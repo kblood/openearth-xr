@@ -1,26 +1,136 @@
 export {
   OpenEarthViewer,
   OPENEARTH_VIEWS,
+  configureOpenEarthCesium,
+  type OpenEarthAttribution,
+  type OpenEarthEventMap,
+  type OpenEarthLifecycleState,
   type OpenEarthPreviewOptions,
+  type OpenEarthSourceErrorDetail,
+  type OpenEarthStateChangeDetail,
   type OpenEarthView,
+  type OpenEarthViewChangeDetail,
   type OpenEarthViewerOptions,
   type OpenEarthXrChangeDetail,
 } from './OpenEarthViewer';
-export { XrGlobeRenderer } from './xr/XrGlobeRenderer';
+export {
+  XrGlobeRenderer,
+  type XrComfortOptions,
+  type XrGlobeRendererOptions,
+} from './xr/XrGlobeRenderer';
+export {
+  createXrAtmosphere,
+  createXrStarField,
+  disposeXrStarField,
+  type XrStarFieldOptions,
+} from './xr/XrSky';
 export {
   CARTO_VOYAGER,
+  CompositeXyzTileProvider,
+  XyzTileCache,
   createGlobalOverviewTexture,
+  providerContainsTile,
+  validateXyzTileProvider,
   XyzTileGlobe,
+  XyzTileScheduler,
+  type CompositeXyzTileProviderOptions,
+  type XyzAtlasErrorEvent,
+  type XyzAtlasLayerId,
+  type XyzAtlasReadyEvent,
+  type XyzGlobalOverviewOptions,
+  type XyzGlobeViewDescriptor,
+  type XyzLocalSurfaceOptions,
+  type XyzScheduledTileResult,
+  type XyzTileBounds,
+  type XyzTileCacheOptions,
+  type XyzTileErrorResult,
+  type XyzTileEvent,
+  type XyzTileEventListener,
+  type XyzTileGlobeOptions,
+  type XyzTileLease,
+  type XyzTileLoadedResult,
+  type XyzTileMissingResult,
   type XyzTileProvider,
+  type XyzTileProviderResponse,
+  type XyzTileResult,
+  type XyzTileSchedulerOptions,
 } from './xr/XyzTileGlobe';
+export {
+  CachedNetworkXyzProvider,
+  createOpenEarthRegionProvider,
+  LegacyOpenMapsIndexedDbStore,
+  OPENEARTH_REGION_SCHEMA,
+  OpenMapsRasterProvider,
+  PersistentTileCache,
+  validateOpenEarthRegionManifest,
+  type CachedNetworkXyzProviderOptions,
+  type LegacyOpenMapsIndexedDbOptions,
+  type OpenEarthRegionManifestV1,
+  type OpenEarthRegionProviderOptions,
+  type OpenEarthRegionRasterLayerV1,
+  type OpenEarthRegionStoreResolver,
+  type OpenMapsRasterSourceMetadata,
+  type OpenMapsRasterTileStore,
+  type PersistentTileCacheOptions,
+} from './adapters/OpenMaps';
 export {
   MvtBuildingProvider,
   OPENFREEMAP_BUILDINGS,
+  BuildingProviderError,
   decodeMvtBuildingTile,
+  decodeMvtBuildingRequest,
+  type BuildingDecodeLimits,
   type BuildingFootprint,
   type BuildingPosition,
+  type BuildingProviderErrorCode,
   type BuildingTileProvider,
   type MvtBuildingProviderOptions,
 } from './buildings/BuildingProvider';
-export { CesiumBuildingLayer } from './buildings/CesiumBuildingLayer';
-export { XrBuildingLayer, createBuildingGeometry } from './buildings/XrBuildingLayer';
+export { CesiumBuildingLayer, type CesiumBuildingLayerOptions } from './buildings/CesiumBuildingLayer';
+export {
+  XrBuildingLayer,
+  createBuildingGeometry,
+  createLocalTangentBuildingGeometry,
+  type BuildingGeometryOptions,
+  type XrBuildingLayerOptions,
+  type XrBuildingReferenceFrame,
+  type XrBuildingView,
+} from './buildings/XrBuildingLayer';
+export {
+  BuildingTaskQueue,
+  budgetBuildingFootprints,
+  buildingRetryDelay,
+  selectBuildingTiles,
+  type BudgetedBuilding,
+  type BuildingDensityOptions,
+  type BuildingTileSelection,
+  type BuildingTileSelectionOptions,
+  type ScheduledBuildingTask,
+  type SelectedBuildingTile,
+} from './buildings/BuildingStreaming';
+export {
+  EARTH_RADIUS_METERS,
+  MAX_MERCATOR_LATITUDE,
+  directionGeodetic,
+  geodeticDirection,
+  globeUnitsToMetres,
+  greatCircleDistanceMeters,
+  metresToGlobeUnits,
+  normalizeView,
+  wrapRadians,
+  wrapLongitude,
+  type GeodeticView,
+  type UnitDirection,
+} from './core/Geo';
+export { BookmarkStore, type BookmarkStorage, type OpenEarthBookmark } from './features/Bookmarks';
+export {
+  CompositeSearchProvider,
+  DEFAULT_PLACES,
+  NominatimSearchProvider,
+  StaticSearchProvider,
+  parseCoordinates,
+  type SearchProvider,
+  type SearchResult,
+} from './features/Search';
+export { GuidedTour, DENMARK_TOUR, type TourChangeDetail, type TourNavigator, type TourStop } from './features/Tour';
+export { MeasurementController, formatDistance, type MeasurementChangeDetail } from './features/Measurement';

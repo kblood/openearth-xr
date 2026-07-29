@@ -1,0 +1,18 @@
+{
+  "name": "OpenEarth",
+  "short_name": "OpenEarth",
+  "description": "An open planet viewer from orbit to streets, on desktop and WebXR.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#030812",
+  "theme_color": "#07111f",
+  "icons": [
+    {
+      "src": "./openearth-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
