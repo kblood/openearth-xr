@@ -17,9 +17,10 @@ try {
   const output = execFileSync(command, args, {
     cwd: process.cwd(),
     encoding: "utf8",
+    env: { ...process.env, npm_config_ignore_scripts: "true" },
     maxBuffer: 10 * 1024 * 1024,
   });
-  const [packed] = JSON.parse(output);
+  const [packed] = parseJsonArraySuffix(output);
   if (!packed) throw new Error("npm pack returned no package metadata");
   const paths = new Set(packed.files.map((entry) => entry.path));
   const required = [
@@ -116,4 +117,22 @@ try {
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });
+}
+
+/** npm 10 can prefix --json output with lifecycle stdout even with ignore-scripts. */
+function parseJsonArraySuffix(output) {
+  const trimmed = output.trim();
+  for (
+    let start = trimmed.lastIndexOf("[");
+    start >= 0;
+    start = trimmed.lastIndexOf("[", start - 1)
+  ) {
+    try {
+      const value = JSON.parse(trimmed.slice(start));
+      if (Array.isArray(value)) return value;
+    } catch {
+      // Continue backwards until the top-level npm metadata array is found.
+    }
+  }
+  throw new Error("npm pack did not emit a valid JSON metadata array");
 }
