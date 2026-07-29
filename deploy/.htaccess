@@ -1,25 +1,33 @@
-Options -Indexes
 AddType application/wasm .wasm
 AddType application/json .json
 AddType application/manifest+json .webmanifest
 
 <IfModule mod_headers.c>
+  Header onsuccess unset X-Content-Type-Options
   Header always set X-Content-Type-Options "nosniff"
+  Header onsuccess unset Referrer-Policy
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header onsuccess unset Strict-Transport-Security
   Header always set Strict-Transport-Security "max-age=31536000"
+  Header onsuccess unset Permissions-Policy
   Header always set Permissions-Policy "camera=(), geolocation=(self), microphone=(), xr-spatial-tracking=(self)"
+  Header onsuccess unset X-Frame-Options
   Header always unset X-Frame-Options
+  Header onsuccess unset Content-Security-Policy
   Header always set Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self' https://*.dionysus.dk; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.basemaps.cartocdn.com; connect-src 'self' https://tile.openstreetmap.org https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://tiles.openfreemap.org https://openfreemap.org https://*.openfreemap.org https://nominatim.openstreetmap.org; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self'"
 
   <FilesMatch "\.(wasm|png|jpg|jpeg|gif|svg|woff2?|json|webmanifest|js|css)$">
+    Header onsuccess unset Cache-Control
     Header always set Cache-Control "public, max-age=86400, must-revalidate"
   </FilesMatch>
 
   <FilesMatch "-[A-Za-z0-9_-]{8,}\.(js|css)$">
+    Header onsuccess unset Cache-Control
     Header always set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
 
   <FilesMatch "^(index\.html|release\.json|SHA256SUMS|sw\.js)$">
+    Header onsuccess unset Cache-Control
     Header always set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
 </IfModule>

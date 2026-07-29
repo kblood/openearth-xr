@@ -108,8 +108,32 @@ printf '%s\n' "`$previous"
       throw "Live release id '$($health.releaseId)' does not match '$releaseId'."
     }
     $indexResponse = Invoke-WebRequest -UseBasicParsing -Uri "$($LiveUrl.TrimEnd('/'))/?release=$releaseId" -TimeoutSec 30
-    foreach ($requiredHeader in @('Content-Security-Policy', 'Permissions-Policy', 'Referrer-Policy', 'Strict-Transport-Security')) {
-      if (-not $indexResponse.Headers[$requiredHeader]) { throw "Live site is missing $requiredHeader." }
+    $contentTypeOptions = [string]$indexResponse.Headers['X-Content-Type-Options']
+    if ($contentTypeOptions -ne 'nosniff') {
+      throw "Unexpected X-Content-Type-Options: $contentTypeOptions"
+    }
+    $referrerPolicy = [string]$indexResponse.Headers['Referrer-Policy']
+    if ($referrerPolicy -ne 'strict-origin-when-cross-origin') {
+      throw "Unexpected Referrer-Policy: $referrerPolicy"
+    }
+    $transportSecurity = [string]$indexResponse.Headers['Strict-Transport-Security']
+    if ($transportSecurity -notmatch '(^|;\s*)max-age=31536000($|;)') {
+      throw "Unexpected Strict-Transport-Security: $transportSecurity"
+    }
+    $permissionsPolicy = [string]$indexResponse.Headers['Permissions-Policy']
+    foreach ($requiredPermission in @('geolocation=(self)', 'xr-spatial-tracking=(self)')) {
+      if (-not $permissionsPolicy.Contains($requiredPermission)) {
+        throw "Permissions-Policy is missing $requiredPermission."
+      }
+    }
+    $contentSecurityPolicy = [string]$indexResponse.Headers['Content-Security-Policy']
+    foreach ($requiredDirective in @("default-src 'self'", "frame-ancestors 'self' https://*.dionysus.dk", "worker-src 'self' blob:")) {
+      if (-not $contentSecurityPolicy.Contains($requiredDirective)) {
+        throw "Content-Security-Policy is missing $requiredDirective."
+      }
+    }
+    if ($indexResponse.Headers['X-Frame-Options']) {
+      throw "Legacy X-Frame-Options is still present: $($indexResponse.Headers['X-Frame-Options'])"
     }
     if ($indexResponse.Headers['Cache-Control'] -notmatch 'no-cache') {
       throw "HTML Cache-Control is unsafe: $($indexResponse.Headers['Cache-Control'])"

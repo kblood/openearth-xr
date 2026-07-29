@@ -5,6 +5,18 @@ Notable changes to OpenEarth XR are documented here. The project follows
 
 ## Unreleased
 
+## 0.5.1 - 2026-07-29
+
+### Changed
+
+- Added a least-privilege Apache deployment prerequisite and strengthened live
+  release checks to validate security-policy values, not only their presence.
+
+### Fixed
+
+- Normalized both Apache response-header tables so the legacy
+  `X-Frame-Options` value cannot conflict with the CSP `frame-ancestors` policy.
+
 ## 0.5.0 - 2026-07-29
 
 ### Added

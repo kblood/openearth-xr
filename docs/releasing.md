@@ -54,6 +54,15 @@ is available for an explicitly reviewed first connection, but pinned host
 identity is preferred. The deploy account needs write access only to the live
 symlink, deploy lock, and `.openearth-releases` directory.
 
+Apache must also permit the release-local `.htaccess` directives that provide
+the CSP, permissions policy, MIME types, and cache rules checked by the release
+gate. Do not enable overrides for the entire document root. Install the scoped
+[`deploy/apache-openearth.conf`](../deploy/apache-openearth.conf) snippet as an
+Apache configuration, enable it, verify `apache2ctl configtest`, and reload
+Apache before the first deployment. It grants only `FileInfo`; the snippet
+itself disables directory indexes on the live symlink and its immutable release
+targets.
+
 ## 4. Deployment behavior
 
 The script always runs release verification, creates a release identity, uploads
