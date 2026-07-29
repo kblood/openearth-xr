@@ -8,6 +8,13 @@ follow the familiar Earth-viewer model: left-drag orbits, right-drag tilts,
 the wheel flies, and double-click travels to a point. Built-in place controls
 provide Earth, Denmark, and Copenhagen viewpoints.
 
+At city and street altitude, OpenEarth streams open OSM building footprints
+and extrudes them on the curved Earth in both Cesium and WebXR. Real
+`render_height`, `render_min_height`, colour, multipolygon, and courtyard data
+are used when available. The built-in OpenFreeMap adapter works without an API
+token; hosts can replace it with self-hosted MVT, cached tiles, or an OpenMaps
+bundle adapter through the public `BuildingTileProvider` interface.
+
 ## Run
 
 ```bash
@@ -52,14 +59,26 @@ default is CARTO Voyager, a readable Latin-script road style derived from OSM;
 the tile provider is isolated behind a configuration seam for a future
 Danish-only style or self-hosted service.
 
+The building layer activates only near the surface and keeps a bounded 5×5
+tile window. Tile requests are cancelled as the viewer moves, failed requests
+retry without blanking existing content, and all geometry, materials, textures,
+and requests are released by `destroy()`.
+The Three.js renderer and its global XR overview are initialized lazily on the
+first XR/preview use, so a desktop-only embed does not allocate a second WebGL
+context or download the immersive overview.
+
+The feasibility choices, open-data fields, 3D Tiles tradeoff, and current
+limits are documented in [3d-buildings.md](docs/3d-buildings.md).
+
 ## Embed in another application
 
 The package exports `OpenEarthViewer`, a UI-independent controller for the
 desktop globe and immersive renderer. Hosts can provide their own container,
 XR canvas, Cesium imagery provider, immersive XYZ tile provider, initial view,
 and camera limits; navigation and XR state are available through methods and an
-`xrchange` event. Cesium and Three.js stay external in the ESM library build so
-an integrating app owns exactly one copy of each engine.
+`xrchange` event. Cesium and Three.js are peer dependencies and stay external
+in the ESM library build, so an integrating app owns exactly one copy of each
+engine.
 
 Run `npm run build:lib` to create the ESM bundle and TypeScript declarations.
 See [integration.md](docs/integration.md) for a complete vanilla example,
@@ -84,8 +103,9 @@ are implemented on desktop. The headset view now uses Three.js's WebXR
 compositor integration (rather than manual per-eye rendering), geographically
 aligned globe-to-surface tiles, and controller grab/orbit/distance/flight input.
 The immersive navigation model now continues from orbit through building-level
-map detail without placing a small globe around the viewer.
-Open terrain, search, and offline bundles are planned layers.
+map detail without placing a small globe around the viewer. Curved 3D buildings
+are implemented in both render paths. Open terrain, search, richer roof models,
+and offline bundles remain planned layers.
 
 ## License
 

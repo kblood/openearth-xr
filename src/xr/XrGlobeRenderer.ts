@@ -20,6 +20,8 @@ import {
   XyzTileGlobe,
   type XyzTileProvider,
 } from './XyzTileGlobe';
+import { XrBuildingLayer } from '../buildings/XrBuildingLayer';
+import type { BuildingTileProvider } from '../buildings/BuildingProvider';
 
 const STARTING_YAW = -0.8;
 const DEAD_ZONE = 0.12;
@@ -50,6 +52,8 @@ export class XrGlobeRenderer {
   private readonly clock = new Clock();
   private readonly hands = new Map<Hand, HandState>();
   private readonly tiles: XyzTileGlobe;
+  private readonly buildings: XrBuildingLayer | null;
+  private readonly overviewAbort = new AbortController();
   private readonly cameraPosition = new Vector3();
   private readonly cameraInGlobeSpace = new Vector3();
   private readonly controllerDirection = new Vector3();
@@ -88,6 +92,7 @@ export class XrGlobeRenderer {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     tileProvider: XyzTileProvider = CARTO_VOYAGER,
+    buildingProvider: BuildingTileProvider | null = null,
   ) {
     this.renderer = new WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -95,6 +100,7 @@ export class XrGlobeRenderer {
     this.renderer.xr.setReferenceSpaceType('local-floor');
     this.renderer.xr.setFoveation(0.6);
     this.tiles = new XyzTileGlobe(EARTH_RADIUS, tileProvider);
+    this.buildings = buildingProvider ? new XrBuildingLayer(EARTH_RADIUS, buildingProvider) : null;
 
     this.scene.background = new Color(0x030812);
     this.camera.position.set(0, 1.6, 0);
@@ -109,13 +115,17 @@ export class XrGlobeRenderer {
     this.planetRig.rotation.y = STARTING_YAW;
     this.planetRig.add(earth);
     this.planetRig.add(this.tiles.group);
+    if (this.buildings) this.planetRig.add(this.buildings.group);
     this.scene.add(this.planetRig);
 
     // Never place a Web-Mercator XYZ tile directly on a sphere: its UVs are
     // equirectangular and would make the globe disagree with the close tiles.
     // This overview is reprojected from the same provider used by the surface.
-    void createGlobalOverviewTexture(tileProvider)
-      .then((texture) => { material.map = texture; material.needsUpdate = true; })
+    void createGlobalOverviewTexture(tileProvider, 3, this.overviewAbort.signal)
+      .then((texture) => {
+        if (this.overviewAbort.signal.aborted) texture.dispose();
+        else { material.map = texture; material.needsUpdate = true; }
+      })
       .catch(() => undefined);
 
     for (let index = 0; index < 2; index += 1) {
@@ -141,8 +151,10 @@ export class XrGlobeRenderer {
    * coverage at a chosen physical camera-to-centre distance without a headset. */
   startPreview(distance: number, longitude = 10.2, latitude = 56.1, scale = 1): void {
     this.canvas.hidden = false;
-    this.renderer.setSize(window.innerWidth, window.innerHeight, false);
-    this.camera.aspect = window.innerWidth / window.innerHeight;
+    const width = Math.max(1, this.canvas.clientWidth || this.canvas.parentElement?.clientWidth || window.innerWidth);
+    const height = Math.max(1, this.canvas.clientHeight || this.canvas.parentElement?.clientHeight || window.innerHeight);
+    this.renderer.setSize(width, height, false);
+    this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.camera.position.set(0, 1.6, 0);
     const safeScale = MathUtils.clamp(scale, 1, MAX_PLANET_SCALE);
@@ -197,6 +209,19 @@ export class XrGlobeRenderer {
   async dispose(): Promise<void> {
     if (this.session) await this.session.end();
     this.renderer.setAnimationLoop(null);
+    this.overviewAbort.abort();
+    this.buildings?.dispose();
+    this.tiles.dispose();
+    this.planetRig.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      object.geometry.dispose();
+      const material = object.material;
+      if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
+      else {
+        if (material instanceof MeshBasicMaterial) material.map?.dispose();
+        material.dispose();
+      }
+    });
     this.renderer.dispose();
     this.canvas.hidden = true;
   }
@@ -219,6 +244,7 @@ export class XrGlobeRenderer {
     this.cameraInGlobeSpace.copy(this.cameraPosition);
     this.planetRig.worldToLocal(this.cameraInGlobeSpace);
     this.tiles.update(this.cameraInGlobeSpace, this.camera.fov, this.camera.aspect);
+    this.buildings?.update(this.cameraInGlobeSpace);
     this.renderer.render(this.scene, this.camera);
   };
 
@@ -228,6 +254,7 @@ export class XrGlobeRenderer {
     this.cameraInGlobeSpace.copy(this.cameraPosition);
     this.planetRig.worldToLocal(this.cameraInGlobeSpace);
     this.tiles.update(this.cameraInGlobeSpace, this.camera.fov, this.camera.aspect);
+    this.buildings?.update(this.cameraInGlobeSpace);
     this.renderer.render(this.scene, this.camera);
   };
 

@@ -15,9 +15,17 @@ if (!container || !xrCanvas || !vrButton || !resetButton || !status) {
   throw new Error('OpenEarth UI failed to initialise.');
 }
 
-const earth = new OpenEarthViewer({ container, xrCanvas, cesiumBaseUrl: './cesium/' });
 const desktopStatus = 'Left drag orbits · right drag tilts · wheel flies · double-click travels';
 const previewParams = new URLSearchParams(window.location.search);
+const requestedView = previewParams.get('view') as keyof typeof OPENEARTH_VIEWS | null;
+const earth = new OpenEarthViewer({
+  container,
+  xrCanvas,
+  cesiumBaseUrl: './cesium/',
+  initialView: requestedView && requestedView in OPENEARTH_VIEWS
+    ? OPENEARTH_VIEWS[requestedView]
+    : OPENEARTH_VIEWS.earth,
+});
 const xrPreview = Number(previewParams.get('xrPreview'));
 
 function setXrUi(active: boolean): void {

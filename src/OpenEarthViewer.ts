@@ -2,6 +2,7 @@ import {
   Cartesian2,
   Cartesian3,
   Cartographic,
+  Credit,
   EllipsoidTerrainProvider,
   ImageryLayer,
   Math as CesiumMath,
@@ -12,6 +13,11 @@ import {
 } from 'cesium';
 import { XrGlobeRenderer } from './xr/XrGlobeRenderer';
 import type { XyzTileProvider } from './xr/XyzTileGlobe';
+import { CesiumBuildingLayer } from './buildings/CesiumBuildingLayer';
+import {
+  OPENFREEMAP_BUILDINGS,
+  type BuildingTileProvider,
+} from './buildings/BuildingProvider';
 
 export interface OpenEarthView {
   readonly longitude: number;
@@ -32,6 +38,8 @@ export interface OpenEarthViewerOptions {
   readonly imageryUrl?: string;
   /** Raster XYZ provider used by the immersive globe and its local LODs. */
   readonly xrTileProvider?: XyzTileProvider;
+  /** Vector footprints extruded in desktop and XR. Pass null to disable. */
+  readonly buildingProvider?: BuildingTileProvider | null;
   readonly initialView?: OpenEarthView;
   readonly minimumZoomDistance?: number;
   readonly maximumZoomDistance?: number;
@@ -51,7 +59,7 @@ export interface OpenEarthPreviewOptions {
 export const OPENEARTH_VIEWS = {
   earth: { longitude: 10, latitude: 34, height: 5_000_000, pitch: -CesiumMath.PI_OVER_TWO },
   denmark: { longitude: 10.2, latitude: 56.1, height: 1_000_000, pitch: -CesiumMath.PI_OVER_TWO },
-  copenhagen: { longitude: 12.5683, latitude: 55.6761, height: 6_000, pitch: -CesiumMath.toRadians(52) },
+  copenhagen: { longitude: 12.5683, latitude: 55.6761, height: 1_200, pitch: -CesiumMath.toRadians(50) },
 } as const satisfies Record<string, OpenEarthView>;
 
 /**
@@ -62,11 +70,13 @@ export const OPENEARTH_VIEWS = {
  */
 export class OpenEarthViewer extends EventTarget {
   readonly viewer: Viewer;
-  readonly xr: XrGlobeRenderer;
+  readonly buildings: CesiumBuildingLayer | null;
   readonly xrCanvas: HTMLCanvasElement;
   private readonly ownsXrCanvas: boolean;
   private readonly initialView: OpenEarthView;
   private readonly originalContainerPosition: string;
+  private readonly buildingProvider: BuildingTileProvider | null;
+  private xrRenderer: XrGlobeRenderer | null = null;
   private destroyed = false;
 
   constructor(readonly options: OpenEarthViewerOptions) {
@@ -101,14 +111,21 @@ export class OpenEarthViewer extends EventTarget {
     this.viewer.scene.screenSpaceCameraController.maximumZoomDistance = options.maximumZoomDistance ?? 60_000_000;
     this.viewer.scene.camera.frustum.near = 1;
 
+    this.buildingProvider = options.buildingProvider === undefined
+      ? OPENFREEMAP_BUILDINGS
+      : options.buildingProvider;
+    this.buildings = this.buildingProvider ? new CesiumBuildingLayer(this.viewer, this.buildingProvider) : null;
+    if (this.buildingProvider) this.viewer.creditDisplay.addStaticCredit(new Credit(this.buildingProvider.attribution));
     this.xrCanvas = options.xrCanvas ?? this.createXrCanvas(container);
-    this.xr = new XrGlobeRenderer(this.xrCanvas, options.xrTileProvider);
     this.initialView = options.initialView ?? OPENEARTH_VIEWS.earth;
     this.installDoubleClickTravel();
     this.flyTo(this.initialView, 0);
   }
 
-  get xrActive(): boolean { return this.xr.active; }
+  /** Lazily creates the immersive renderer when a host needs its low-level API. */
+  get xr(): XrGlobeRenderer { return this.getOrCreateXr(); }
+
+  get xrActive(): boolean { return this.xrRenderer?.active ?? false; }
 
   flyTo(view: OpenEarthView, duration = 1.6): void {
     this.assertAvailable();
@@ -151,7 +168,7 @@ export class OpenEarthViewer extends EventTarget {
 
   async enterXr(): Promise<void> {
     this.assertAvailable();
-    await this.xr.enter(
+    await this.getOrCreateXr().enter(
       () => {
         this.viewer.useDefaultRenderLoop = true;
         this.dispatchXrChange(false);
@@ -163,12 +180,12 @@ export class OpenEarthViewer extends EventTarget {
     );
   }
 
-  async exitXr(): Promise<void> { await this.xr.exit(); }
+  async exitXr(): Promise<void> { await this.xrRenderer?.exit(); }
 
   startPreview(options: OpenEarthPreviewOptions): void {
     this.assertAvailable();
     this.viewer.useDefaultRenderLoop = false;
-    this.xr.startPreview(
+    this.getOrCreateXr().startPreview(
       options.distance,
       options.longitude ?? 10.2,
       options.latitude ?? 56.1,
@@ -178,13 +195,14 @@ export class OpenEarthViewer extends EventTarget {
 
   stopPreview(): void {
     this.assertAvailable();
-    this.xr.stopPreview();
+    this.xrRenderer?.stopPreview();
     this.viewer.useDefaultRenderLoop = true;
   }
 
   async destroy(): Promise<void> {
     if (this.destroyed) return;
-    await this.xr.dispose();
+    this.buildings?.dispose();
+    await this.xrRenderer?.dispose();
     if (!this.viewer.isDestroyed()) this.viewer.destroy();
     if (this.ownsXrCanvas) {
       this.xrCanvas.remove();
@@ -230,6 +248,16 @@ export class OpenEarthViewer extends EventTarget {
 
   private dispatchXrChange(active: boolean): void {
     this.dispatchEvent(new CustomEvent<OpenEarthXrChangeDetail>('xrchange', { detail: { active } }));
+  }
+
+  private getOrCreateXr(): XrGlobeRenderer {
+    this.assertAvailable();
+    this.xrRenderer ??= new XrGlobeRenderer(
+      this.xrCanvas,
+      this.options.xrTileProvider,
+      this.buildingProvider,
+    );
+    return this.xrRenderer;
   }
 
   private assertAvailable(): void {

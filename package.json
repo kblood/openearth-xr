@@ -1,7 +1,7 @@
 {
   "name": "openearth-xr",
   "private": false,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "main": "./dist-lib/openearth.js",
   "module": "./dist-lib/openearth.js",
@@ -22,6 +22,7 @@
     "build": "npm run build:app && npm run build:lib",
     "build:app": "tsc --noEmit && vite build",
     "build:lib": "tsc -p tsconfig.lib.json && vite build -c vite.lib.config.ts",
+    "test": "vitest run",
     "prepare": "npm run build:lib",
     "preview": "vite preview",
     "release": "powershell -ExecutionPolicy Bypass -File scripts/release.ps1"
@@ -29,11 +30,19 @@
   "devDependencies": {
     "@types/three": "^0.181.0",
     "@types/webxr": "^0.5.22",
+    "cesium": "^1.143.0",
+    "three": "^0.181.0",
     "typescript": "^5.8.3",
     "vite": "^6.2.2",
-    "vite-plugin-static-copy": "^4.1.1"
+    "vite-plugin-static-copy": "^4.1.1",
+    "vitest": "^4.1.10",
+    "vt-pbf": "^3.1.3"
   },
   "dependencies": {
+    "@mapbox/vector-tile": "^3.0.0",
+    "pbf": "^5.1.2"
+  },
+  "peerDependencies": {
     "cesium": "^1.143.0",
     "three": "^0.181.0"
   }

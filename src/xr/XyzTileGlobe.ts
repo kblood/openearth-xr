@@ -62,6 +62,7 @@ type AtlasLayer = {
 export async function createGlobalOverviewTexture(
   provider: XyzTileProvider = CARTO_VOYAGER,
   zoom = 3,
+  signal?: AbortSignal,
 ): Promise<CanvasTexture> {
   const level = MathUtils.clamp(zoom, provider.minZoom, Math.min(provider.maxZoom, 4));
   const count = 2 ** level;
@@ -76,9 +77,13 @@ export async function createGlobalOverviewTexture(
   const tiles = await Promise.all(Array.from({ length: count * count }, async (_, index) => {
     const x = index % count;
     const y = Math.floor(index / count);
-    const image = await loadProviderTile(provider, level, x, y);
+    const image = await loadProviderTile(provider, level, x, y, signal);
     return { x, y, image };
   }));
+  if (signal?.aborted) {
+    for (const tile of tiles) tile.image?.close();
+    throw new DOMException('Global overview cancelled', 'AbortError');
+  }
   for (const { x, y, image } of tiles) {
     if (!image) continue;
     sourceContext.drawImage(image, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -125,9 +130,9 @@ export class XyzTileGlobe {
     // A broad low-LOD context remains around the normal view, the base layer
     // covers the current FOV, and a central +1 LOD layer brings street labels
     // in earlier without leaving the surrounding surface blank.
-    this.contextLayer = this.createLayer(BASE_TILE_GRID, -2, 0.000002, -2, 1);
-    this.baseLayer = this.createLayer(BASE_TILE_GRID, 0, 0.000004, -4, 2);
-    this.detailLayer = this.createLayer(4, 1, 0.000006, -6, 3);
+    this.contextLayer = this.createLayer(BASE_TILE_GRID, -2, 0.00000002, -2, 1);
+    this.baseLayer = this.createLayer(BASE_TILE_GRID, 0, 0.00000004, -4, 2);
+    this.detailLayer = this.createLayer(4, 1, 0.00000006, -6, 3);
     this.layers = [this.contextLayer, this.baseLayer, this.detailLayer];
   }
 
@@ -162,6 +167,19 @@ export class XyzTileGlobe {
     else this.contextLayer.surface.visible = false;
     if (detailLevel > level) this.updateLayer(this.detailLayer, detailLevel, longitude, latitude);
     else this.detailLayer.surface.visible = false;
+  }
+
+  dispose(): void {
+    for (const layer of this.layers) {
+      layer.abort?.abort();
+      layer.texture.dispose();
+      layer.surface.geometry.dispose();
+      const material = layer.surface.material;
+      if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
+      else material.dispose();
+      layer.surface.removeFromParent();
+    }
+    this.group.removeFromParent();
   }
 
   private createLayer(
@@ -359,9 +377,13 @@ async function loadProviderTile(
   y: number,
   signal?: AbortSignal,
 ): Promise<ImageBitmap | null> {
-  if (provider.loadTile) return provider.loadTile(z, x, y, signal);
-  if (provider.url) return fetchTile(provider.url(z, x, y), signal);
-  throw new Error(`XYZ tile provider '${provider.id}' must define url or loadTile`);
+  try {
+    if (provider.loadTile) return await provider.loadTile(z, x, y, signal);
+    if (provider.url) return await fetchTile(provider.url(z, x, y), signal);
+    throw new Error(`XYZ tile provider '${provider.id}' must define url or loadTile`);
+  } catch {
+    return null;
+  }
 }
 
 function longitudeToTileX(longitude: number, count: number): number {

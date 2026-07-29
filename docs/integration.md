@@ -84,6 +84,9 @@ control.
 - `imageryProvider` accepts a host-created Cesium imagery provider.
 - `imageryUrl` changes the default desktop OpenStreetMap XYZ endpoint.
 - `xrTileProvider` changes the immersive raster XYZ provider and its LODs.
+- `buildingProvider` supplies renderer-independent 3D footprints to both
+  Cesium and WebXR. Omit it for the token-free OpenFreeMap default or pass
+  `null` to disable buildings.
 - `cesiumBaseUrl` points to the host's copied Cesium runtime assets.
 - `minimumZoomDistance` and `maximumZoomDistance` tune desktop camera limits.
 - `initialView` controls the reset destination.
@@ -113,6 +116,45 @@ const earth = new OpenEarthViewer({ container, xrTileProvider });
 
 This is the seam for cached/OPFS tiles and for a future OpenMaps raster adapter;
 no loopback web server or object-URL bookkeeping is required.
+
+### 3D building providers
+
+Use the built-in global source explicitly, or create an adapter for self-hosted
+OpenMapTiles/OpenMaps-compatible MVT:
+
+```ts
+import {
+  MvtBuildingProvider,
+  OPENFREEMAP_BUILDINGS,
+  OpenEarthViewer,
+} from 'openearth-xr';
+
+const selfHostedBuildings = new MvtBuildingProvider({
+  id: 'my-region-buildings',
+  attribution: '© OpenStreetMap contributors',
+  minZoom: 13,
+  maxZoom: 14,
+  sourceLayer: 'buildings',
+  url: (z, x, y) => `/regions/denmark/${z}/${x}/${y}.pbf`,
+});
+
+const earth = new OpenEarthViewer({
+  container,
+  buildingProvider: navigator.onLine
+    ? OPENFREEMAP_BUILDINGS
+    : selfHostedBuildings,
+});
+```
+
+For OPFS, IndexedDB, or a native bridge, implement `BuildingTileProvider`
+directly and return normalized `BuildingFootprint[]`. This deliberately avoids
+requiring an HTTP endpoint and is the intended OpenMaps bundle integration
+seam. Heights are metres above the ellipsoid; each polygon's first ring is its
+exterior and later rings are holes.
+
+The package declares Cesium and Three.js as peer dependencies. Install one
+compatible copy of each in the host and copy Cesium's runtime assets as shown
+above; the OpenEarth ESM bundle will reuse those engine instances.
 
 ## Framework lifecycle
 

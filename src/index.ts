@@ -13,4 +13,14 @@ export {
   XyzTileGlobe,
   type XyzTileProvider,
 } from './xr/XyzTileGlobe';
-
+export {
+  MvtBuildingProvider,
+  OPENFREEMAP_BUILDINGS,
+  decodeMvtBuildingTile,
+  type BuildingFootprint,
+  type BuildingPosition,
+  type BuildingTileProvider,
+  type MvtBuildingProviderOptions,
+} from './buildings/BuildingProvider';
+export { CesiumBuildingLayer } from './buildings/CesiumBuildingLayer';
+export { XrBuildingLayer, createBuildingGeometry } from './buildings/XrBuildingLayer';

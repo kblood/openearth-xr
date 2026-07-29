@@ -14,7 +14,7 @@ UI / navigation
         │
 XR session + input ── Globe renderer (WebGL/WebGPU evolution)
         │
-Scene model: camera, planet, terrain, vector overlays
+Scene model: camera, planet, terrain, vector overlays + 3D buildings
         │
 Bundle adapter ── cache/storage ── optional network providers
 ```
@@ -24,6 +24,27 @@ and camera precision required to move continuously from space to city scale.
 OpenStreetMap is the default public imagery source; terrain is deliberately a
 provider seam so a future build can use open DEM data or verified offline
 bundles without an account/token requirement.
+
+## 3D buildings
+
+Buildings use a renderer-neutral `BuildingTileProvider`. The built-in MVT
+adapter decodes OpenMapTiles/OSM polygons into longitude/latitude rings plus
+height, minimum height, and colour. Cesium turns each tile into batched
+`PolygonGeometry` instances; the XR renderer triangulates roofs and walls onto
+the same curved Three.js globe as the raster surface. This shared decoded model
+keeps desktop, headset, network, and future offline rendering geographically
+identical without coupling OpenEarth to a particular tile host.
+
+Both implementations select a bounded 5×5 window at the provider's highest
+building LOD, abort obsolete work, retain only nearby GPU objects, and delay
+retries after provider failures. The layer is dormant above city altitude.
+`OpenEarthViewer` uses OpenFreeMap by default and accepts `null` to disable the
+layer or any `BuildingTileProvider` to replace it.
+
+OGC 3D Tiles remains a complementary future path for photogrammetry and authored
+landmarks. It is excellent for massive scene streaming in Cesium, but a generic
+3D Tiles source would require a second compatible renderer in WebXR. Footprint
+extrusion was therefore the practical first cross-renderer implementation.
 
 ## Offline regional bundle contract (planned)
 
@@ -88,7 +109,7 @@ visible. This avoids blank zoom frames, gaps, flat-map transitions, mirrored
 labels, and unrelated-tile jumps, while a minimum radial distance prevents the
 viewer entering the globe.
 
-1. Controller ray targeting, teleport-to-place, and landmark selection.
+1. Controller ray targeting, teleport-to-place, and building/landmark selection.
 2. Tile cache abstraction and open terrain provider.
-3. OpenStreetMap vector overlay plus terrain/imagery provider adapters.
+3. Roof shapes, landmark models, and optional OGC 3D Tiles on desktop.
 4. Offline bundle manifest and OpenMaps-compatible export adapter.
