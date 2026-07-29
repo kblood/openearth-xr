@@ -2,5 +2,13 @@ node_modules/
 dist/
 dist-lib/
 .vite/
+coverage/
+playwright-report/
+test-results/
+artifacts/
+release-artifacts/
 *.log
 *-preview.png
+/openearth-*-preview.png
+/xr-*.png
+*.tgz

@@ -1,38 +1,120 @@
 {
   "name": "openearth-xr",
   "private": false,
-  "version": "0.4.0",
+  "version": "0.5.0",
+  "description": "Embeddable open-source Earth viewer with Cesium desktop rendering, Three.js WebXR, open map tiles, and 3D buildings.",
   "type": "module",
+  "license": "MIT",
+  "author": "Kristian Blood",
+  "homepage": "https://dionysus.dk/openearth/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kblood/openearth-xr.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kblood/openearth-xr/issues"
+  },
+  "keywords": [
+    "cesium",
+    "earth",
+    "geospatial",
+    "openstreetmap",
+    "three.js",
+    "webxr"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "main": "./dist-lib/openearth.js",
   "module": "./dist-lib/openearth.js",
   "types": "./dist-lib/types/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist-lib/types/index.d.ts",
-      "import": "./dist-lib/openearth.js"
-    }
+      "import": "./dist-lib/openearth.js",
+      "default": "./dist-lib/openearth.js"
+    },
+    "./adapters": {
+      "types": "./dist-lib/types/entries/adapters.d.ts",
+      "import": "./dist-lib/adapters.js",
+      "default": "./dist-lib/adapters.js"
+    },
+    "./buildings": {
+      "types": "./dist-lib/types/entries/buildings.d.ts",
+      "import": "./dist-lib/buildings.js",
+      "default": "./dist-lib/buildings.js"
+    },
+    "./core": {
+      "types": "./dist-lib/types/entries/core.d.ts",
+      "import": "./dist-lib/core.js",
+      "default": "./dist-lib/core.js"
+    },
+    "./raster": {
+      "types": "./dist-lib/types/entries/raster.d.ts",
+      "import": "./dist-lib/raster.js",
+      "default": "./dist-lib/raster.js"
+    },
+    "./xr": {
+      "types": "./dist-lib/types/entries/xr.d.ts",
+      "import": "./dist-lib/xr.js",
+      "default": "./dist-lib/xr.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist-lib",
+    "docs",
+    "src",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "PRIVACY.md",
+    "SECURITY.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "dev": "vite",
+    "clean": "node scripts/clean.mjs all",
+    "clean:app": "node scripts/clean.mjs app",
+    "clean:lib": "node scripts/clean.mjs lib",
     "build": "npm run build:app && npm run build:lib",
-    "build:app": "tsc --noEmit && vite build",
-    "build:lib": "tsc -p tsconfig.lib.json && vite build -c vite.lib.config.ts",
+    "build:app": "npm run clean:app && npm run typecheck:src && vite build && npm run verify:dist",
+    "build:lib": "npm run clean:lib && tsc -p tsconfig.lib.json && vite build -c vite.lib.config.ts",
+    "typecheck": "npm run typecheck:src && npm run typecheck:tests",
+    "typecheck:src": "tsc --noEmit",
+    "typecheck:tests": "tsc -p tsconfig.test.json --noEmit",
+    "typecheck:consumer": "tsc -p tsconfig.consumer.json --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write \".github/**/*.{yml,yaml}\" \"docs/**/*.md\" \"src/entries/**/*.ts\" \"*.{md,json,ts,mjs}\" \"scripts/**/*.{mjs,ts}\"",
+    "format:check": "prettier --check \".github/**/*.{yml,yaml}\" \"docs/**/*.md\" \"src/entries/**/*.ts\" \"*.{md,json,ts,mjs}\" \"scripts/**/*.{mjs,ts}\"",
     "test": "vitest run",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm test && npm run build && npm run typecheck:consumer && npm run pack:check",
     "prepare": "npm run build:lib",
     "preview": "vite preview",
+    "verify:dist": "node scripts/verify-dist.mjs",
+    "pack:check": "node scripts/verify-package.mjs",
+    "smoke:browser": "node scripts/browser-smoke.mjs",
+    "release:verify": "npm run check",
+    "release:artifacts": "node scripts/create-release-artifacts.mjs",
     "release": "powershell -ExecutionPolicy Bypass -File scripts/release.ps1"
   },
   "devDependencies": {
-    "@types/three": "^0.181.0",
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "^1.60.0",
     "@types/webxr": "^0.5.22",
     "cesium": "^1.143.0",
+    "eslint": "10.8.0",
+    "globals": "^17.8.0",
+    "prettier": "^3.9.6",
     "three": "^0.181.0",
     "typescript": "^5.8.3",
+    "typescript-eslint": "^8.65.0",
     "vite": "^6.2.2",
     "vite-plugin-static-copy": "^4.1.1",
     "vitest": "^4.1.10",
@@ -40,10 +122,11 @@
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
+    "@types/three": "^0.181.0",
     "pbf": "^5.1.2"
   },
   "peerDependencies": {
     "cesium": "^1.143.0",
-    "three": "^0.181.0"
+    "three": ">=0.181.0 <0.182.0"
   }
 }

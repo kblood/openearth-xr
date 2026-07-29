@@ -18,6 +18,12 @@ resolved at runtime instead of pinning a dated tile path. Applications that
 need availability guarantees should provide their own URL or implement
 `BuildingTileProvider` over cached/OpenMaps bundle data.
 
+Token-free does not mean attribution-free or private: tile coordinates and
+ordinary request metadata reach the provider. Desktop and immersive views must
+both visibly credit OpenFreeMap, OpenMapTiles, and OpenStreetMap. Availability,
+offline, and redistribution guidance is maintained in
+[providers-and-licenses.md](providers-and-licenses.md).
+
 ## Why not use only OGC 3D Tiles?
 
 [OGC 3D Tiles](https://www.ogc.org/standards/3DTiles/) is designed for massive

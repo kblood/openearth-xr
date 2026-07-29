@@ -2,8 +2,11 @@
 
 ## Principles
 
-- **WebXR first, not VR only.** One renderer supports desktop, touch, and immersive sessions.
-- **Offline by design.** A viewer remains useful with previously downloaded areas.
+- **WebXR first, not VR only.** One public controller coordinates a precision
+  Cesium desktop renderer and a dedicated Three.js immersive compositor.
+- **Offline-capable contracts.** Provider APIs accept previously downloaded
+  areas; persistent raster caching and the versioned `openearth-region-v1`
+  routing manifest are implemented.
 - **Open data and replaceable providers.** No proprietary imagery or platform lock-in is assumed.
 - **Independent repository.** Compatibility is via documented bundle contracts, never a source-code dependency on OpenMaps.
 
@@ -41,21 +44,39 @@ retries after provider failures. The layer is dormant above city altitude.
 `OpenEarthViewer` uses OpenFreeMap by default and accepts `null` to disable the
 layer or any `BuildingTileProvider` to replace it.
 
+Network defaults are a convenience preset, not an offline guarantee. Desktop,
+XR, and building providers are independent: replacing one does not stop the
+others from contacting their defaults. Privacy-sensitive and offline hosts must
+configure each provider explicitly. See [providers and licences](providers-and-licenses.md).
+
+The standalone service worker caches only same-origin application and Cesium
+runtime assets. It does not intercept third-party raster, vector-building, or
+search requests, so an installable shell must not be mistaken for a downloaded
+map region. Bookmarks and interface preferences are local browser data; optional
+Nominatim search and browser geolocation are user-initiated capabilities.
+
 OGC 3D Tiles remains a complementary future path for photogrammetry and authored
 landmarks. It is excellent for massive scene streaming in Cesium, but a generic
 3D Tiles source would require a second compatible renderer in WebXR. Footprint
 extrusion was therefore the practical first cross-renderer implementation.
 
-## Offline regional bundle contract (planned)
+## Offline regional raster contract
 
-OpenEarth will consume a versioned manifest rather than a repository package. A future `openearth-region-v1` manifest will identify:
+The library exposes `OpenMapsRasterProvider`, a read-only bridge for OpenMaps'
+legacy IndexedDB tile store, and a generic `OpenMapsRasterTileStore` contract for
+OPFS/native/bundle readers. The validated `openearth-region-v1` manifest records
+an id, geographic bounds, level-of-detail range, attribution, and one or more
+ordered raster-layer/store ids. `createOpenEarthRegionProvider` turns one or
+more manifests plus a store resolver into a bounds-aware composite provider;
+manifest and layer order define cross-pack priority, with optional global
+fallback providers.
 
-- geographic bounds and level-of-detail coverage;
-- raster/vector terrain and map assets with checksums;
-- optional search/routing data declared as independent capabilities;
-- attribution and licence metadata.
-
-An adapter can then translate OpenMaps-compatible regional exports into this contract, while each project stays independently buildable and releasable.
+These contracts feed the immersive XYZ renderer without a source dependency on
+OpenMaps, so each project stays independently buildable and releasable. The v1
+manifest is routing metadata rather than a portable archive: it does not yet
+standardize checksums, file transport, terrain, buildings, search/routing data,
+or a matching Cesium imagery provider. Those can evolve as additive or later
+versioned capabilities without weakening v1 validation.
 
 ## Roadmap
 
@@ -75,29 +96,34 @@ a miniature globe. Dual grip applies a midpoint-preserving transform where hand
 separation changes virtual altitude and the hand-to-hand vector rotates Earth.
 Flight, pinch, and stick zoom all use this altitude; field of view never changes.
 
-Navigation has two continuous regimes. Above a globe-local altitude of `0.32`,
-Earth remains at scale 1 and travel changes physical camera-to-centre distance.
-Below that threshold, Earth scales smoothly up to 4000× while its surface stays
-at a constant comfortable physical clearance through the final available LOD.
-Globe-local altitude still decreases, so
-the tile selector advances from aircraft to city, street, and building LOD.
-Collision uses scaled radius plus physical clearance, rather than an unscaled
-fixed radius. Grab translation is converted through the current physical Earth
-radius, keeping the terrain-to-hand gain constant after the scale transition.
+Navigation has continuous orbital and local-surface regimes. At orbital scale,
+travel changes physical camera-to-centre distance; approaching Earth then grows
+the globe while maintaining comfortable clearance. Below roughly six kilometres,
+a camera-relative east/up/south tangent root carries the focus map and buildings
+near the numeric origin while the global globe remains behind it. Its scale
+changes continuously with virtual altitude, so the ground stays about room-scale
+without rebuilding local geometry every frame. Hysteresis, banded patch sizes,
+and periodic geographic re-anchoring avoid transition flicker and Float32 jitter.
+The same virtual altitude drives collision, tile LOD, buildings, sticks, grips,
+pinch, and trigger flight, so no control changes field of view or passes through
+the planet.
 
-Thumbstick axes are remapped quadratically outside the dead zone. Angular turn
-gain is divided by the effective Earth scale, which bounds near-surface ground
-speed, while zoom rate interpolates logarithmically from orbital to minimum
-altitude. Two-hand pinch uses the same proximity value to reduce its exponent
-near the surface.
+Thumbstick axes are remapped quadratically outside the dead zone. Outside local
+mode, angular gain bounds surface speed as Earth grows. In local mode, pan is
+expressed in real metres per second and falls continuously from aircraft speed
+to walking pace, while heading remains a comfortable viewer turn. Zoom rate
+interpolates logarithmically from orbital to minimum altitude, and two-hand
+pinch uses the same proximity value to reduce its exponent near the surface.
 
 The map surface is a multi-LOD renderer. An orbital parent globe receives a
 Web-Mercator XYZ overview reprojected to equirectangular UVs; this avoids
 incorrectly stretching a single Mercator tile across a sphere. Near the
-surface, three independently atomic atlases are loaded around the viewer's
+surface, four independently atomic atlases are loaded around the viewer's
 nadir: a broad 6×6 context layer at `base - 2`, a 6×6 base layer chosen from
 globe-local virtual altitude, camera FOV, aspect ratio, and Mercator latitude
-stretch, and a central 4×4 detail layer at `base + 1`. The context layer keeps
+stretch, a central 4×4 detail layer at `base + 1`, and a 2×2 focus layer at
+`base + 2` (bounded by provider coverage). The focus layer becomes a near-origin
+tangent mesh in local mode. The context layer keeps
 surrounding terrain available when the user looks away from the centre, while
 the detail layer preserves street-label continuity across base LOD changes.
 Every atlas vertex is
@@ -110,6 +136,21 @@ labels, and unrelated-tile jumps, while a minimum radial distance prevents the
 viewer entering the globe.
 
 1. Controller ray targeting, teleport-to-place, and building/landmark selection.
-2. Tile cache abstraction and open terrain provider.
+2. Open terrain/elevation provider shared by desktop, XR, and regional manifests.
 3. Roof shapes, landmark models, and optional OGC 3D Tiles on desktop.
-4. Offline bundle manifest and OpenMaps-compatible export adapter.
+4. Portable archive/export tooling and manifest capabilities for terrain,
+   buildings, search, routing, and checksums.
+
+## Quality and release boundaries
+
+The npm library build externalizes Cesium, Three.js, the MVT decoder, and PBF so
+host applications own one engine/runtime copy and ordinary dependency resolution
+remains transparent. Clean builds remove previous outputs before generating the
+ESM bundle, declarations, declaration maps, and JavaScript source map. Source is
+included in the package so those maps resolve.
+
+CI verifies two Node LTS lines, unit tests, type safety, formatting, browser and
+package contents, production size, and a real Chromium startup. WebXR behavior
+still requires the [physical-headset checklist](headset-release-checklist.md).
+Static deployments are immutable release directories selected by a symlink and
+verified through checksums plus a live release manifest.
